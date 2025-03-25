@@ -1,0 +1,50 @@
+services:
+  redis:
+    image: redis:latest
+    container_name: redis
+    command: >
+      redis-server --requirepass redis
+    networks:
+      - auth
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongo
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=user
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    networks:
+      - auth
+
+  auth-server:
+    container_name: auth-server
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    restart: always
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - auth
+
+  reverse-proxy:
+    container_name: reverse-proxy
+    build: ./nginx
+    depends_on:
+      - auth-server
+    ports:
+      - "443:443"
+    networks:
+      - auth
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt
+
+volumes:
+  mongodb_data:
+
+networks:
+  auth:
+    driver: bridge
