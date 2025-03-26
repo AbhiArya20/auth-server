@@ -45,7 +45,7 @@ class Server {
     app.use(useragent.express());
 
     // Configure body parser middleware
-    app.use(bodyParser.json({ limit: "10mb" }));
+    app.use(bodyParser.json({ limit: "2mb" }));
 
     // Configure rate limiter middleware
     app.use(
@@ -71,9 +71,11 @@ class Server {
     // Configure routes
     app.use("/v1/", AuthRouter);
     app.get("/", (req: Request, res: Response) => {
-      res
-        .status(200)
-        .json({ message: "welcome to the auth server.", status: "Running" });
+      res.status(200).json({
+        message: "welcome to the auth server.",
+        status: "Running",
+        yourIP: req.ip,
+      });
     });
 
     // Errors handling middleware

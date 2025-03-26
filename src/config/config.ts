@@ -25,9 +25,9 @@ class Config {
     MAX_REQUEST: z.coerce.number().min(1),
     WINDOW_SECONDS: z.coerce.number().min(1),
     BLOCKED_FOR_SECONDS: z.coerce.number().min(1),
-    MAX_REQUEST_OTP: z.coerce.number().min(1),
-    WINDOW_SECONDS_OTP: z.coerce.number().min(1),
-    BLOCKED_FOR_SECONDS_OTP: z.coerce.number().min(1),
+    MAX_REQUEST_ROUTES: z.coerce.number().min(1),
+    WINDOW_SECONDS_ROUTES: z.coerce.number().min(1),
+    BLOCKED_FOR_SECONDS_ROUTES: z.coerce.number().min(1),
     REDIS_HOST: z.string(),
     REDIS_PORT: z.coerce.number().min(1),
     REDIS_USERNAME: z.string(),
@@ -115,10 +115,10 @@ class Config {
   static readonly BLOCKED_FOR_SECONDS = Config.config.BLOCKED_FOR_SECONDS;
 
   // Ratelimiter for send OTP or verify OTP
-  static readonly MAX_REQUEST_OTP = Config.config.MAX_REQUEST_OTP;
-  static readonly WINDOW_SECONDS_OTP = Config.config.WINDOW_SECONDS_OTP;
-  static readonly BLOCKED_FOR_SECONDS_OTP =
-    Config.config.BLOCKED_FOR_SECONDS_OTP;
+  static readonly MAX_REQUEST_ROUTES = Config.config.MAX_REQUEST_ROUTES;
+  static readonly WINDOW_SECONDS_ROUTES = Config.config.WINDOW_SECONDS_ROUTES;
+  static readonly BLOCKED_FOR_SECONDS_ROUTES =
+    Config.config.BLOCKED_FOR_SECONDS_ROUTES;
 
   // Redis configuration
   static readonly REDIS_HOST = Config.config.REDIS_HOST;

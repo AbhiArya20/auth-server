@@ -9,7 +9,7 @@ class Constants {
   static readonly INCORRECT_PASSWORD =
     "The password you entered is incorrect. Please try again.";
   static readonly PASSWORD_NOT_SET_MESSAGE =
-    "Password has not been set. Please try logging in with another method.";
+    "Password has not been set. Please try login with another method.";
   static readonly UNVERIFIED_USER_MESSAGE =
     "Your account has not been verified yet. Please check your inbox for the verification link";
   static readonly ACCOUNT_DELETED_MESSAGE =

@@ -5,8 +5,5 @@ class RedisKeys {
   public static getUserKey(_id?: string) {
     return `user:${_id}`;
   }
-  public static getUserStatusKey(_id?: string) {
-    return `user:status:${_id}`;
-  }
 }
 export default RedisKeys;

@@ -15,8 +15,6 @@ import UserDTO from "@/dtos/user_dto.js";
 import { SuccessResponse } from "@/utils/response-classes.ts/success-response.js";
 import { SendEmailService } from "@/services/email_services.js";
 import HashService from "@/services/hash_services.js";
-import crypto from "crypto";
-import RedisClient from "@/config/redis.js";
 import OtpServices from "@/services/otp_services";
 import { IUserSchema } from "@/models/user_model";
 
@@ -243,21 +241,11 @@ class AuthController {
       const formattedUser = new UserDTO(user);
 
       // If user is blocked or deleted
-      const { status, isEmailVerified, isPhoneVerified } = formattedUser;
+      const { status } = formattedUser;
       if (status === UserStatus.BLOCKED || status === UserStatus.DELETED) {
         return res
           .status(status === UserStatus.BLOCKED ? 403 : 404)
           .json(createAccountStatusErrorResponse(status));
-      }
-
-      // If user is already verified
-      if ((email && isEmailVerified) || (phone && isPhoneVerified)) {
-        return res.status(406).json(
-          new ErrorResponse({
-            code: Constants.ALREADY_VERIFIED,
-            message: Constants.ALREADY_VERIFIED_MESSAGE,
-          })
-        );
       }
 
       // Send token or otp depending on the method, and save verificationToken and verificationTokenExpiresAt in database.
@@ -325,6 +313,7 @@ class AuthController {
         : user.phoneVerificationTokenExpiresAt;
 
       // If verification token or verification token date is not found
+      // TODO: Fix error message here
       if (!verificationToken || !verificationTokenDate) {
         return res.status(400).json(
           new ErrorResponse({
@@ -367,11 +356,29 @@ class AuthController {
         frontendHash != backendHash
       ) {
         return res.status(400).json(
+          // TODO: Fix error message here
           new ErrorResponse({
             code: Constants.INVALID_OTP,
             message: Constants.OTP_INVALID_MESSAGE,
           })
         );
+      }
+
+      if (
+        method === AuthenticationMethod.SMS_OTP ||
+        method === AuthenticationMethod.WHATSAPP_OTP ||
+        method === AuthenticationMethod.EMAIL_OTP
+      ) {
+        const key = user._id.toString() + ":" + method + ":" + otp;
+        const isUsed = await OtpServices.isUsed(key);
+        if (isUsed) {
+          return res.status(406).json(
+            new ErrorResponse({
+              code: Constants.OTP_USED,
+              message: Constants.OTP_USED_MESSAGE,
+            })
+          );
+        }
       }
 
       const formattedUser = new UserDTO(user);
@@ -389,11 +396,13 @@ class AuthController {
         await UserService.updateById(user._id, {
           emailVerificationToken: null,
           emailVerificationTokenExpiresAt: null,
+          isEmailVerified: Date.now(),
         });
       } else {
         await UserService.updateById(user._id, {
           phoneVerificationToken: null,
           phoneVerificationTokenExpiresAt: null,
+          isPhoneVerified: Date.now(),
         });
       }
 
@@ -484,7 +493,7 @@ class AuthController {
     }
   }
 
-  public static async forgotPasswordSendOtp(
+  public static async forgotPassword(
     req: Request,
     res: Response,
     next: NextFunction
@@ -514,20 +523,33 @@ class AuthController {
           .json(createAccountStatusErrorResponse(status));
       }
 
-      // Generate OTP and hash
-      const otp = await crypto.randomInt(100000, 1000000);
-      const expireTime = Date.now() + 5 * 60 * 1000;
-      const data = `${email}.${otp}.${expireTime}`;
-      const hash = HashService.hash(data);
+      // Send token or otp depending on the method, and save verificationToken and verificationTokenExpiresAt in database.
+      const { hash } = await AuthControllerUtility.sendVerificationDetails({
+        user,
+        method,
+        email,
+        phone,
+        forgotPassword: true,
+      });
 
-      // Send OTP via email and send response
-      await SendEmailService.sendOTPEmail(email, user.firstName, otp);
-
+      // create DTO and send response
+      const formattedUser = new UserDTO(user);
       return res.status(200).json(
         new SuccessResponse({
-          data: { hash: `${hash}.${expireTime}`, email },
-          code: Constants.OTP_SENT,
-          message: Constants.OTP_SENT_MESSAGE,
+          data: {
+            email,
+            phone,
+            hash:
+              method === AuthenticationMethod.MAGIC_LINK ||
+              method === AuthenticationMethod.PASSWORD
+                ? undefined
+                : hash,
+            method,
+            user: formattedUser,
+          },
+          // TODO: Fix error message here
+          code: Constants.REGISTRATION_SUCCESS,
+          message: Constants.REGISTRATION_SUCCESS_MESSAGE,
         })
       );
     } catch (error) {
@@ -536,32 +558,82 @@ class AuthController {
     }
   }
 
-  public static async forgotPasswordVerifyOtp(
+  public static async forgotPasswordVerify(
     req: Request,
     res: Response,
     next: NextFunction
   ) {
     try {
-      const { otp, hash, email, newPassword } = req.body;
+      // Destructure request body
+      const { phone, email, method, hash, otp } = req.body;
 
-      const [hashFromFrontend, expireTime] = hash.split(".");
+      // Get user from database
+      const user = await UserService.findOne({
+        ...(email && { email }),
+        ...(phone && { phone }),
+      });
 
-      // Check for OTP expired?
-      if (expireTime < Date.now()) {
-        return res.status(408).json(
+      // If user is not found
+      if (!user) {
+        return res.status(404).json(
           new ErrorResponse({
-            code: Constants.REQUEST_TIMEOUT,
-            message: Constants.OTP_EXPIRED_MESSAGE,
+            code: Constants.USER_NOT_REGISTER,
+            message: Constants.USER_REGISTERED_MESSAGE,
           })
         );
       }
 
-      // Check OTP is correct
-      const data = `${email}.${otp}.${expireTime}`;
-      const computedHash = HashService.hash(data);
+      // Get hash and expire time from hash
+      const [frontendHash, expireAt] = hash.split("-");
 
-      if (computedHash !== hashFromFrontend) {
+      const verificationToken = user.passwordResetToken;
+      const verificationTokenDate = user.passwordResetExpiresAt;
+
+      // If verification token or verification token date is not found
+      // TODO: Fix error message here
+      if (!verificationToken || !verificationTokenDate) {
         return res.status(400).json(
+          new ErrorResponse({
+            code: Constants.INVALID_LINK,
+            message: Constants.INVALID_VERIFICATION_LINK_MESSAGE,
+          })
+        );
+      }
+
+      const verificationTokenExpiresAt = new Date(verificationTokenDate);
+
+      // If verification token expired
+      if (verificationTokenExpiresAt.getMilliseconds() < Date.now()) {
+        return res.status(400).json(
+          new ErrorResponse({
+            code: Constants.REQUEST_TIMEOUT,
+            message: Constants.EXPIRE_VERIFICATION_LINK_MESSAGE,
+          })
+        );
+      }
+
+      const { token, hash: backendGeneratedHash } =
+        await AuthControllerUtility.generateTokenAndHash({
+          email,
+          phone,
+          otp,
+          method,
+          userId: user._id.toString(),
+          expireAt,
+        });
+
+      const backendHash = HashService.hash(
+        verificationToken,
+        Config.SECONDARY_HASH_SECRET
+      );
+
+      if (
+        frontendHash !== backendGeneratedHash ||
+        token !== verificationToken ||
+        frontendHash != backendHash
+      ) {
+        return res.status(400).json(
+          // TODO: Fix error message here
           new ErrorResponse({
             code: Constants.INVALID_OTP,
             message: Constants.OTP_INVALID_MESSAGE,
@@ -569,57 +641,56 @@ class AuthController {
         );
       }
 
-      const key = "OTP:" + email + ":" + otp;
-      const isUsed = await RedisClient.get(key);
-
-      if (isUsed) {
-        return res.status(406).json(
-          new ErrorResponse({
-            code: Constants.OTP_USED,
-            message: Constants.OTP_USED_MESSAGE,
-          })
-        );
+      if (
+        method === AuthenticationMethod.SMS_OTP ||
+        method === AuthenticationMethod.WHATSAPP_OTP ||
+        method === AuthenticationMethod.EMAIL_OTP
+      ) {
+        const key = user._id.toString() + ":" + method + ":" + otp;
+        const isUsed = await OtpServices.isUsed(key);
+        if (isUsed) {
+          return res.status(406).json(
+            new ErrorResponse({
+              code: Constants.OTP_USED,
+              message: Constants.OTP_USED_MESSAGE,
+            })
+          );
+        }
       }
 
-      await RedisClient.setex(key, 300, 1);
+      const formattedUser = new UserDTO(user);
 
-      // Check user registered
-      let user = await UserService.findOneWithEmail({ email });
-      if (!user) {
-        return res.status(404).json(
-          new ErrorResponse({
-            code: Constants.NOT_FOUND,
-            message: Constants.USER_NOT_FOUND_MESSAGE,
-          })
-        );
+      // If user is blocked or deleted
+      const { status } = formattedUser;
+      if (status === UserStatus.BLOCKED || status === UserStatus.DELETED) {
+        return res
+          .status(status === UserStatus.BLOCKED ? 403 : 404)
+          .json(createAccountStatusErrorResponse(status));
       }
 
-      // Check user's status
-      const { status } = user;
-      if (status === "Blocked" || status === "Deleted") {
-        return res.status(401).json(createAccountStatusErrorResponse(status));
+      // update verification token and verification token date
+      if (email) {
+        await UserService.updateById(user._id, {
+          emailVerificationToken: null,
+          emailVerificationTokenExpiresAt: null,
+          isEmailVerified: Date.now(),
+        });
+      } else {
+        await UserService.updateById(user._id, {
+          phoneVerificationToken: null,
+          phoneVerificationTokenExpiresAt: null,
+          isPhoneVerified: Date.now(),
+        });
       }
 
-      user = await UserService.updateOne(
-        { _id: user._id },
-        { $set: { password: newPassword } }
-      );
+      // Set cookies and send response
+      await AuthControllerUtility.setCookies(res, { ...formattedUser });
 
-      // Create DTO
-      const formattedUser = new UserDTO(user!);
-
-      // Delete CustomerId if user's email is not verified
-      if (!formattedUser.isEmailVerified) {
-        delete formattedUser.customerId; // Important delete for security
-      }
-
-      // Set cookies and Send response
-      await setCookies(res, { ...formattedUser });
       return res.status(200).json(
         new SuccessResponse({
-          data: formattedUser,
-          code: Constants.LOGIN_SUCCESS,
-          message: Constants.LOGIN_SUCCESS_MESSAGE,
+          data: { user: formattedUser },
+          code: Constants.VERIFICATION_SUCCESSFUL,
+          message: Constants.VERIFICATION_SUCCESSFUL_MESSAGE,
         })
       );
     } catch (error) {
@@ -642,6 +713,70 @@ class AuthController {
       next(error);
     }
   }
+
+  public static async getCurrentUser(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const user = await UserService.findById(req._id!);
+      if (!user) {
+        return res.status(404).json(
+          new ErrorResponse({
+            code: Constants.NOT_FOUND,
+            message: Constants.USER_NOT_FOUND_MESSAGE,
+          })
+        );
+      }
+
+      const formattedUser = new UserDTO(user);
+
+      return res.status(200).json(
+        new SuccessResponse({
+          data: { formattedUser },
+        })
+      );
+    } catch (error) {
+      console.error(error);
+      next(error);
+    }
+  }
+
+  public static async updateCurrentUser(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { firstName, lastName, avatar } = req.body;
+
+      const user = await UserService.updateById(req._id!, {
+        firstName,
+        lastName,
+        avatar,
+      });
+      if (!user) {
+        return res.status(404).json(
+          new ErrorResponse({
+            code: Constants.NOT_FOUND,
+            message: Constants.USER_NOT_FOUND_MESSAGE,
+          })
+        );
+      }
+
+      const formattedUser = new UserDTO(user);
+
+      return res.status(200).json(
+        new SuccessResponse({
+          data: { formattedUser },
+        })
+      );
+    } catch (error) {
+      console.error(error);
+      next(error);
+    }
+  }
 }
 
 type GenerateTokenAndHashProps = {
@@ -658,6 +793,7 @@ type HandleUserVerificationProps = {
   method: string;
   email: string;
   phone: string;
+  forgotPassword?: boolean;
 };
 
 class AuthControllerUtility {
@@ -666,6 +802,7 @@ class AuthControllerUtility {
     method,
     email,
     phone,
+    forgotPassword = false,
   }: HandleUserVerificationProps) {
     const otp = await OtpServices.generateOtp();
 
@@ -686,17 +823,24 @@ class AuthControllerUtility {
       userId: user._id.toString(),
     });
 
-    // Update user with verification token and expiration date
-    if (email) {
+    if (forgotPassword) {
       await UserService.updateById(user._id, {
-        emailVerificationToken: token,
-        emailVerificationTokenExpiresAt: expireAt,
+        passwordResetToken: token,
+        passwordResetExpiresAt: expireAt,
       });
     } else {
-      await UserService.updateById(user._id, {
-        phoneVerificationToken: token,
-        phoneVerificationTokenExpiresAt: expireAt,
-      });
+      // Update user with verification token and expiration date
+      if (email) {
+        await UserService.updateById(user._id, {
+          emailVerificationToken: token,
+          emailVerificationTokenExpiresAt: expireAt,
+        });
+      } else {
+        await UserService.updateById(user._id, {
+          phoneVerificationToken: token,
+          phoneVerificationTokenExpiresAt: expireAt,
+        });
+      }
     }
 
     // Send OTP via the chosen method
@@ -705,7 +849,11 @@ class AuthControllerUtility {
       (method === AuthenticationMethod.MAGIC_LINK ||
         method === AuthenticationMethod.PASSWORD)
     ) {
-      await SendEmailService.sendVerifyEmail(email, user.firstName ?? "", hash);
+      await SendEmailService.sendVerifyEmail(
+        email,
+        user.firstName ?? "",
+        hash + "-" + expireAt
+      );
     } else if (email && method === AuthenticationMethod.EMAIL_OTP) {
       await SendEmailService.sendOTPEmail(email, user.firstName ?? "", otp);
     } else if (phone && method === AuthenticationMethod.SMS_OTP) {
@@ -714,7 +862,7 @@ class AuthControllerUtility {
       await OtpServices.sendOtpViaWhatsapp(phone, otp);
     }
 
-    return { hash };
+    return { hash: hash + "-" + expireAt };
   }
 
   public static async generateTokenAndHash({
@@ -741,8 +889,7 @@ class AuthControllerUtility {
 
     // Generate token and hash
     const token = HashService.hash(data);
-    const hash =
-      HashService.hash(token, Config.SECONDARY_HASH_SECRET) + "-" + expireAt;
+    const hash = HashService.hash(token, Config.SECONDARY_HASH_SECRET);
 
     return { token, hash }; // Return both token and hash
   }
@@ -764,13 +911,13 @@ class AuthControllerUtility {
     // Set cookies in response
     res.cookie(Config.ACCESS_TOKEN_KEY, accessToken, {
       maxAge: Config.ACCESS_TOKEN_MAX_AGE / 1000,
-      httpOnly: false,
+      httpOnly: Config.NODE_ENV === "production",
       secure: Config.IS_SECURE,
       sameSite: "lax",
     });
     res.cookie(Config.REFRESH_TOKEN_KEY, refreshToken, {
       maxAge: remember ? Config.REFRESH_TOKEN_MAX_AGE : undefined,
-      httpOnly: false,
+      httpOnly: Config.NODE_ENV === "production",
       secure: Config.IS_SECURE,
       sameSite: "lax",
     });

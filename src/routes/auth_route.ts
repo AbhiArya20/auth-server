@@ -3,59 +3,96 @@ import AuthValidator from "@/validators/auth_validator.js";
 import AuthController from "@/controllers/auth_controller.js";
 import { rateLimiterMiddleware } from "@/middlewares/rate_limiter_middleware.js";
 import Config from "@/config/config.js";
+import AuthMiddleware from "@/middlewares/auth_middleware";
+import { uploadMiddleware } from "@/middlewares/file_upload_middleware";
 
 const AuthRouter = express.Router();
 
-// Register new user
-AuthRouter.post("/register", AuthValidator.register, AuthController.register);
-
-// Login user
-AuthRouter.post("/login", AuthValidator.login, AuthController.login);
-
-// resend ;
 AuthRouter.post(
-  "/resend-send-verification",
+  "/register",
+  rateLimiterMiddleware(
+    Config.MAX_REQUEST_ROUTES,
+    Config.WINDOW_SECONDS_ROUTES,
+    Config.BLOCKED_FOR_SECONDS_ROUTES,
+    "Auth"
+  ),
+  AuthValidator.register,
+  AuthController.register
+);
+
+AuthRouter.post(
+  "/login",
+  rateLimiterMiddleware(
+    Config.MAX_REQUEST_ROUTES,
+    Config.WINDOW_SECONDS_ROUTES,
+    Config.BLOCKED_FOR_SECONDS_ROUTES,
+    "Auth"
+  ),
+  AuthValidator.login,
+  AuthController.login
+);
+
+AuthRouter.post(
+  "/resend",
+  rateLimiterMiddleware(
+    Config.MAX_REQUEST_ROUTES,
+    Config.WINDOW_SECONDS_ROUTES,
+    Config.BLOCKED_FOR_SECONDS_ROUTES,
+    "Auth"
+  ),
   AuthValidator.resend,
   AuthController.resend
 );
 
-// Logout user from the application
-AuthRouter.get("/logout", AuthController.logout);
-
-// Get new access token using refresh token
-AuthRouter.get("/refresh-token", AuthController.refreshToken);
-
-// Verify user's email address using the verification link sent in the email
 AuthRouter.post(
-  "/verify-verification-link",
+  "/verify",
+  rateLimiterMiddleware(
+    Config.MAX_REQUEST_ROUTES,
+    Config.WINDOW_SECONDS_ROUTES,
+    Config.BLOCKED_FOR_SECONDS_ROUTES,
+    "Auth"
+  ),
   AuthValidator.verify,
   AuthController.verify
 );
 
-// Forgot password - send OTP to user's registered email address
+AuthRouter.get("/refresh-token", AuthController.refreshToken);
+
+AuthRouter.get("/logout", AuthController.logout);
+
 AuthRouter.post(
-  "/forgot-password-send-otp",
+  "/forgot-password",
   rateLimiterMiddleware(
-    Config.MAX_REQUEST_OTP,
-    Config.WINDOW_SECONDS_OTP,
-    Config.BLOCKED_FOR_SECONDS_OTP,
+    Config.MAX_REQUEST_ROUTES,
+    Config.WINDOW_SECONDS_ROUTES,
+    Config.BLOCKED_FOR_SECONDS_ROUTES,
     "Auth"
   ),
-  AuthValidator.forgotPasswordSendOtp,
-  AuthController.forgotPasswordSendOtp
+  AuthValidator.forgotPassword,
+  AuthController.forgotPassword
 );
 
 // Verify OTP sent to user's registered email address to reset password
 AuthRouter.post(
-  "/forgot-password-verify-otp",
+  "/forgot-password-verify",
   rateLimiterMiddleware(
-    Config.MAX_REQUEST_OTP,
-    Config.WINDOW_SECONDS_OTP,
-    Config.BLOCKED_FOR_SECONDS_OTP,
+    Config.MAX_REQUEST_ROUTES,
+    Config.WINDOW_SECONDS_ROUTES,
+    Config.BLOCKED_FOR_SECONDS_ROUTES,
     "Auth"
   ),
-  AuthValidator.forgotPasswordVerifyOtp,
-  AuthController.forgotPasswordVerifyOtp
+  AuthValidator.forgotPasswordVerify,
+  AuthController.forgotPasswordVerify
+);
+
+AuthRouter.get("/me", AuthMiddleware.middleware, AuthController.getCurrentUser);
+
+AuthRouter.put(
+  "/me",
+  AuthMiddleware.middleware,
+  uploadMiddleware.single("avatar"),
+  AuthValidator.updateUser,
+  AuthController.updateCurrentUser
 );
 
 export default AuthRouter;

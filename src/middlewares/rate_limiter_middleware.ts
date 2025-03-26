@@ -45,12 +45,10 @@ const rateLimiterMiddleware = (
         let microSecondTime: number = Date.now() + blockedForSeconds * 1000;
 
         // Adjust the block duration based on the area and the number of requests exceeding the limit
-        if (area || currentRequests - maxRequests > 100) {
-          microSecondTime = Math.round(
-            microSecondTime +
-              Math.pow(2, Math.min(currentRequests - maxRequests, 45))
-          );
-        }
+        microSecondTime = Math.round(
+          microSecondTime +
+            Math.pow(2, Math.min(currentRequests - maxRequests, 35))
+        );
 
         // Set the expiration time for the key and send a 429 response with an error message
         await RedisClient.expire(key, Math.round(microSecondTime / 1000));
@@ -59,7 +57,7 @@ const rateLimiterMiddleware = (
           new ErrorResponse({
             error: {
               code: "RATE_LIMIT_EXCEEDED",
-              retryAfter: blockedForSeconds,
+              retryAfter: microSecondTime,
             },
             code: "RATE_LIMIT_EXCEEDED",
             message: `You have exceeded the rate limit of ${maxRequests} requests per ${windowSeconds} seconds. Try after ${date.getDate()} ${date.toLocaleString(

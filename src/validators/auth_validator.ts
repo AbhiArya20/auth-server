@@ -36,7 +36,7 @@ const phoneZod = z
   .string({ message: "Please provide a valid phone number." })
   .trim()
   .min(10, "Phone number must contain at least 10 digits")
-  .max(10, "Phone number must be less than or equal to 10 digits.")
+  .max(10, "Phone number should not be more than 10 digits.")
   .regex(/^\d{10}$/, {
     message: "Please provide a valid phone number.",
   });
@@ -64,13 +64,23 @@ const otpZod = z
   .min(100000, { message: "OTP must be a 6-digit number." })
   .max(999999, { message: "OTP must be a 6-digit number." });
 
-const methodZod = z.enum([
-  AuthenticationMethod.MAGIC_LINK,
-  AuthenticationMethod.EMAIL_OTP,
-  AuthenticationMethod.SMS_OTP,
-  AuthenticationMethod.WHATSAPP_OTP,
-  AuthenticationMethod.PASSWORD,
-]);
+const avatarZod = z.object({
+  image: z.string().url(),
+  etag: z.string(),
+});
+
+const methodZod = z.enum(
+  [
+    AuthenticationMethod.MAGIC_LINK,
+    AuthenticationMethod.EMAIL_OTP,
+    AuthenticationMethod.SMS_OTP,
+    AuthenticationMethod.WHATSAPP_OTP,
+    AuthenticationMethod.PASSWORD,
+  ],
+  {
+    message: "please provide a valid method",
+  }
+);
 
 type superRefinedProps = {
   email?: string;
@@ -212,19 +222,29 @@ const verifyZodSchema = z
     superRefined({ email, phone, method }, ctx)
   );
 
-const forgotPasswordVerifyOtpZodSchema = z
+const forgotPasswordZodSchema = z
   .object({
-    email: emailZod,
-    phone: phoneZod,
-    hash: hashZod,
-    otp: otpZod,
-    newPassword: passwordZod,
-    confirmNewPassword: passwordZod,
+    email: emailZod.optional(),
+    phone: phoneZod.optional(),
+    method: methodZod.exclude([AuthenticationMethod.PASSWORD]),
   })
-  .refine(
-    (values) => values.newPassword === values.confirmNewPassword,
-    "The passwords do not match. Please re-enter them."
+  .superRefine(({ email, phone, method }, ctx) =>
+    superRefined({ email, phone, method }, ctx)
   );
+
+const forgotPasswordVerifyZodSchema = z.object({
+  email: emailZod,
+  phone: phoneZod,
+  hash: hashZod,
+  otp: otpZod,
+  newPassword: passwordZod,
+});
+
+const updateUserZodSchema = z.object({
+  firstName: firstNameZod.optional(),
+  lastName: lastNameZod,
+  avatar: avatarZod.optional(),
+});
 
 class AuthValidator {
   public static register(req: Request, res: Response, next: NextFunction) {
@@ -259,26 +279,37 @@ class AuthValidator {
     next();
   }
 
-  public static forgotPasswordSendOtp(
+  public static forgotPassword(
     req: Request,
     res: Response,
     next: NextFunction
   ) {
-    const { error, data } = emailZodSchema.safeParse(req.body);
+    const { error, data } = forgotPasswordZodSchema.safeParse(req.body);
     if (error)
       return res.status(400).json(createValidationErrorResponse(error));
     req.body = data;
     next();
   }
 
-  public static forgotPasswordVerifyOtp(
+  public static forgotPasswordVerify(
     req: Request,
     res: Response,
     next: NextFunction
   ) {
-    const { error, data } = forgotPasswordVerifyOtpZodSchema.safeParse(
-      req.body
-    );
+    const { error, data } = forgotPasswordVerifyZodSchema.safeParse(req.body);
+    if (error)
+      return res.status(400).json(createValidationErrorResponse(error));
+    req.body = data;
+    next();
+  }
+
+  public static updateUser(req: Request, res: Response, next: NextFunction) {
+    const { location, etag } = req.file;
+    req.body.avatar = {
+      image: location,
+      etag,
+    };
+    const { error, data } = updateUserZodSchema.safeParse(req.body);
     if (error)
       return res.status(400).json(createValidationErrorResponse(error));
     req.body = data;
