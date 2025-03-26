@@ -21,8 +21,10 @@ export interface IUserSchema {
   role: (typeof UserRole)[keyof typeof UserRole];
   status: (typeof UserStatus)[keyof typeof UserStatus];
   avatar?: IImages;
-  verificationToken?: string;
-  verificationTokenExpiresAt?: Date;
+  emailVerificationToken?: string;
+  emailVerificationTokenExpiresAt?: Date;
+  phoneVerificationToken?: string;
+  phoneVerificationTokenExpiresAt?: Date;
   passwordResetToken?: string;
   passwordResetExpiresAt?: Date;
   createdAt: Date;
@@ -87,10 +89,16 @@ const userSchema = new mongoose.Schema<IUserSchema>(
         etag: { type: String, required: true },
       },
     },
-    verificationToken: {
+    emailVerificationToken: {
       type: String,
     },
-    verificationTokenExpiresAt: {
+    emailVerificationTokenExpiresAt: {
+      type: Date,
+    },
+    phoneVerificationToken: {
+      type: String,
+    },
+    phoneVerificationTokenExpiresAt: {
       type: Date,
     },
     passwordResetToken: {

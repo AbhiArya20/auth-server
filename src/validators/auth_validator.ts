@@ -72,10 +72,15 @@ const methodZod = z.enum([
   AuthenticationMethod.PASSWORD,
 ]);
 
-type superRefinedProps = { email?: string; phone?: string; method: string };
+type superRefinedProps = {
+  email?: string;
+  phone?: string;
+  method: string;
+  password?: string;
+};
 
 function superRefined(
-  { email, phone, method }: superRefinedProps,
+  { email, phone, method, password }: superRefinedProps,
   ctx: z.RefinementCtx
 ) {
   // Check if both email and phone are provided
@@ -124,6 +129,18 @@ function superRefined(
     });
   }
 
+  if (email && method === AuthenticationMethod.PASSWORD && !password) {
+    ctx.addIssue({
+      path: ["password"],
+      message: "Password is required when method is PASSWORD",
+      code: z.ZodIssueCode.custom,
+      params: {
+        type: "custom",
+        code: "PASSWORD_REQUIRED",
+      },
+    });
+  }
+
   // Phone must be present when method is SMS_OTP or WHATSAPP_OTP
   if (
     phone &&
@@ -144,18 +161,6 @@ function superRefined(
   }
 }
 
-const loginZodSchema = z
-  .object({
-    email: emailZod.optional(),
-    phone: phoneZod.optional(),
-    password: passwordZod,
-    remember: z.boolean().optional().default(true),
-    method: methodZod,
-  })
-  .superRefine(({ email, phone, method }, ctx) =>
-    superRefined({ email, phone, method }, ctx)
-  );
-
 const registerZodSchema = z
   .object({
     firstName: firstNameZod.optional(),
@@ -163,16 +168,32 @@ const registerZodSchema = z
     email: emailZod.optional(),
     phone: phoneZod.optional(),
     password: passwordZod.optional(),
-    method: methodZod.exclude([AuthenticationMethod.PASSWORD]),
+    method: methodZod,
   })
-  .superRefine(({ email, phone, method }, ctx) =>
-    superRefined({ email, phone, method }, ctx)
+  .superRefine(({ email, phone, method, password }, ctx) =>
+    superRefined({ email, phone, method, password }, ctx)
+  );
+
+const loginZodSchema = z
+  .object({
+    email: emailZod.optional(),
+    phone: phoneZod.optional(),
+    password: z
+      .string({ message: "Password cannot be empty" })
+      .trim()
+      .min(1, "Password cannot be empty")
+      .optional(),
+    remember: z.boolean().optional().default(true),
+    method: methodZod,
+  })
+  .superRefine(({ email, phone, method, password }, ctx) =>
+    superRefined({ email, phone, method, password }, ctx)
   );
 
 const resendZodSchema = z
   .object({
-    email: emailZod,
-    phone: phoneZod,
+    email: emailZod.optional(),
+    phone: phoneZod.optional(),
     method: methodZod.exclude([AuthenticationMethod.PASSWORD]),
   })
   .superRefine(({ email, phone, method }, ctx) =>
@@ -181,10 +202,11 @@ const resendZodSchema = z
 
 const verifyZodSchema = z
   .object({
-    email: emailZod,
-    phone: phoneZod,
-    hash: hashZod,
+    email: emailZod.optional(),
+    phone: phoneZod.optional(),
     method: methodZod.exclude([AuthenticationMethod.PASSWORD]),
+    otp: otpZod.optional(),
+    hash: hashZod,
   })
   .superRefine(({ email, phone, method }, ctx) =>
     superRefined({ email, phone, method }, ctx)

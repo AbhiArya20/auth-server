@@ -30,7 +30,7 @@ class Constants {
   static readonly VERIFICATION_LINK_SEND_MESSAGE =
     "A verification link has been sent to your account. Please check your inbox to complete the verification.";
   static readonly EXPIRE_VERIFICATION_LINK_MESSAGE =
-    "The verification link has expired. Please request a new one.";
+    "The verification details has expired. Please request a new one.";
   static readonly OTP_EXPIRED_MESSAGE =
     "The OTP has expired. Please request a new one to continue.";
   static readonly OTP_INVALID_MESSAGE =

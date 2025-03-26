@@ -7,7 +7,7 @@ const createMessage = (otp: number) => {
   return `Dear User Your Mobile Verification Code is : ${otp} Please Verify Your Mobile Number. ${Config.APP_NAME}`;
 };
 
-class OtpServices {
+class OtpService {
   // Generate OTP
   public static async generateOtp() {
     return crypto.randomInt(100000, 1000000);
@@ -65,4 +65,4 @@ class OtpServices {
   }
 }
 
-export default OtpServices;
+export default OtpService;

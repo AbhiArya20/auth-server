@@ -6,7 +6,7 @@ import RefreshUserModel, {
 } from "@/models/refresh_user_model.js";
 import UserDTO from "@/dtos/user_dto.js";
 
-class TokenServices {
+class TokenService {
   // Verify Access Token
   public static async verifyAccessToken(accessToken: string) {
     return jwt.verify(accessToken, Config.JWT_ACCESS_TOKEN_SECRET);
@@ -43,11 +43,11 @@ class TokenServices {
     refreshToken: string,
     userId: string | ObjectId
   ) {
-    return await RefreshUserModel.findOneAndUpdate(
-      { userId, token: { $in: [refreshToken] } },
-      { $pull: { token: refreshToken } }
-    );
+    return await RefreshUserModel.findOneAndDelete({
+      userId,
+      token: refreshToken,
+    });
   }
 }
 
-export default TokenServices;
+export default TokenService;

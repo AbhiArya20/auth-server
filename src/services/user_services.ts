@@ -3,7 +3,7 @@ import UserModel, { IUserSchema } from "@/models/user_model.js";
 import RedisFunctions from "@/utils/redis/redis_function.js";
 import RedisKeys from "@/utils/redis/redis_keys.js";
 
-class UserServices {
+class UserService {
   public static async find(
     query: FilterQuery<IUserSchema> = {},
     sort: Record<string, 1 | -1> = { createdAt: -1 },
@@ -36,8 +36,10 @@ class UserServices {
       | "role"
       | "status"
       | "avatar"
-      | "verificationToken"
-      | "verificationTokenExpiresAt"
+      | "emailVerificationToken"
+      | "emailVerificationTokenExpiresAt"
+      | "phoneVerificationToken"
+      | "phoneVerificationTokenExpiresAt"
       | "passwordResetToken"
       | "passwordResetExpiresAt"
     >
@@ -72,4 +74,4 @@ class UserServices {
   }
 }
 
-export default UserServices;
+export default UserService;

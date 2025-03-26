@@ -14,7 +14,7 @@ import ErrorResponse, {
 import UserDTO from "@/dtos/user_dto.js";
 import { SuccessResponse } from "@/utils/response-classes.ts/success-response.js";
 import { SendEmailService } from "@/services/email_services.js";
-import { HashServices } from "@/services/hash_services.js";
+import HashService from "@/services/hash_services.js";
 import crypto from "crypto";
 import RedisClient from "@/config/redis.js";
 import OtpServices from "@/services/otp_services";
@@ -70,7 +70,11 @@ class AuthController {
           data: {
             email,
             phone,
-            hash: method === AuthenticationMethod.MAGIC_LINK ? undefined : hash,
+            hash:
+              method === AuthenticationMethod.MAGIC_LINK ||
+              method === AuthenticationMethod.PASSWORD
+                ? undefined
+                : hash,
             method,
             user: formattedUser,
           },
@@ -142,7 +146,7 @@ class AuthController {
         if (!isEmailVerified && !isPhoneVerified) {
           return res.status(200).json(
             new SuccessResponse({
-              data: { formattedUser },
+              data: { user: formattedUser },
               code: Constants.UNVERIFIED_USER,
               message: Constants.UNVERIFIED_USER_MESSAGE,
             })
@@ -155,6 +159,7 @@ class AuthController {
           { ...formattedUser },
           remember
         );
+
         return res.status(200).json(
           new SuccessResponse({
             data: { user: formattedUser },
@@ -166,12 +171,18 @@ class AuthController {
 
       // Create a new user if not registered
       if (!user) {
-        // Create new user
         user = await UserService.create({
           email,
           phone,
-          password,
         });
+      }
+
+      // If user is blocked or deleted
+      const { status } = user;
+      if (status === UserStatus.BLOCKED || status === UserStatus.DELETED) {
+        return res
+          .status(status === UserStatus.BLOCKED ? 403 : 404)
+          .json(createAccountStatusErrorResponse(status));
       }
 
       // Send token or otp depending on the method, and save verificationToken and verificationTokenExpiresAt in database.
@@ -189,7 +200,11 @@ class AuthController {
           data: {
             email,
             phone,
-            hash: method === AuthenticationMethod.MAGIC_LINK ? undefined : hash,
+            hash:
+              method === AuthenticationMethod.MAGIC_LINK ||
+              method === AuthenticationMethod.PASSWORD
+                ? undefined
+                : hash,
             method,
             user: formattedUser,
           },
@@ -259,7 +274,11 @@ class AuthController {
           data: {
             email,
             phone,
-            hash: method === AuthenticationMethod.MAGIC_LINK ? undefined : hash,
+            hash:
+              method === AuthenticationMethod.MAGIC_LINK ||
+              method === AuthenticationMethod.PASSWORD
+                ? undefined
+                : hash,
             method,
             user: formattedUser,
           },
@@ -276,20 +295,7 @@ class AuthController {
   public static async verify(req: Request, res: Response, next: NextFunction) {
     try {
       // Destructure request body
-      const { phone, email, method, hash } = req.body;
-
-      // Get hash and expire time from hash
-      const [hashFromFrontend, expireTime] = hash.split("-");
-
-      // if hash expired
-      if (+expireTime < Date.now()) {
-        return res.status(408).json(
-          new ErrorResponse({
-            code: Constants.REQUEST_TIMEOUT,
-            message: Constants.EXPIRE_VERIFICATION_LINK_MESSAGE,
-          })
-        );
-      }
+      const { phone, email, method, hash, otp } = req.body;
 
       // Get user from database
       const user = await UserService.findOne({
@@ -301,14 +307,26 @@ class AuthController {
       if (!user) {
         return res.status(404).json(
           new ErrorResponse({
-            code: Constants.INVALID_LINK,
-            message: Constants.INVALID_VERIFICATION_LINK_MESSAGE,
+            code: Constants.USER_NOT_REGISTER,
+            message: Constants.USER_REGISTERED_MESSAGE,
           })
         );
       }
 
-      if (!user.verificationToken) {
-        return res.status(404).json(
+      // Get hash and expire time from hash
+      const [frontendHash, expireAt] = hash.split("-");
+
+      const verificationToken = email
+        ? user.emailVerificationToken
+        : user.phoneVerificationToken;
+
+      const verificationTokenDate = email
+        ? user.emailVerificationTokenExpiresAt
+        : user.phoneVerificationTokenExpiresAt;
+
+      // If verification token or verification token date is not found
+      if (!verificationToken || !verificationTokenDate) {
+        return res.status(400).json(
           new ErrorResponse({
             code: Constants.INVALID_LINK,
             message: Constants.INVALID_VERIFICATION_LINK_MESSAGE,
@@ -316,78 +334,75 @@ class AuthController {
         );
       }
 
-      if (!user.verificationTokenExpiresAt) {
-        return res.status(404).json(
+      const verificationTokenExpiresAt = new Date(verificationTokenDate);
+
+      // If verification token expired
+      if (verificationTokenExpiresAt.getMilliseconds() < Date.now()) {
+        return res.status(400).json(
           new ErrorResponse({
-            code: Constants.INVALID_LINK,
-            message: Constants.INVALID_VERIFICATION_LINK_MESSAGE,
+            code: Constants.REQUEST_TIMEOUT,
+            message: Constants.EXPIRE_VERIFICATION_LINK_MESSAGE,
           })
         );
       }
 
-      if (user.verificationTokenExpiresAt.getMilliseconds() < Date.now()) {
-        return res.status(404).json(
-          new ErrorResponse({
-            code: Constants.INVALID_LINK,
-            message: Constants.INVALID_VERIFICATION_LINK_MESSAGE,
-          })
-        );
-      }
+      const { token, hash: backendGeneratedHash } =
+        await AuthControllerUtility.generateTokenAndHash({
+          email,
+          phone,
+          otp,
+          method,
+          userId: user._id.toString(),
+          expireAt,
+        });
 
-      const generatedHash = HashServices.hash(
-        user.verificationToken,
+      const backendHash = HashService.hash(
+        verificationToken,
         Config.SECONDARY_HASH_SECRET
       );
-      const isHashValid = hashFromFrontend === generatedHash;
-      if (!isHashValid) {
+
+      if (
+        frontendHash !== backendGeneratedHash ||
+        token !== verificationToken ||
+        frontendHash != backendHash
+      ) {
         return res.status(400).json(
           new ErrorResponse({
-            code: Constants.INVALID_LINK,
-            message: Constants.INVALID_VERIFICATION_LINK_MESSAGE,
+            code: Constants.INVALID_OTP,
+            message: Constants.OTP_INVALID_MESSAGE,
           })
         );
       }
 
-      // Verify Hash
-      const data = `${email}.${user.customerId}.${expireTime}`;
-      const actualHash = HashServices.hash(data);
+      const formattedUser = new UserDTO(user);
 
-      if (hashFromFrontend != actualHash) {
-        return res.status(400).json(
-          new ErrorResponse({
-            code: Constants.INVALID_LINK,
-            message: Constants.INVALID_VERIFICATION_LINK_MESSAGE,
-          })
-        );
-      }
-
-      if (user.isEmailVerified) {
-        return res.status(409).json(
-          new ErrorResponse({
-            code: Constants.ALREADY_VERIFIED,
-            message: Constants.ALREADY_VERIFIED_MESSAGE,
-          })
-        );
-      }
-
-      // Check user's status
-      const { status } = user;
-      if (status === "Blocked" || status === "Deleted") {
+      // If user is blocked or deleted
+      const { status } = formattedUser;
+      if (status === UserStatus.BLOCKED || status === UserStatus.DELETED) {
         return res
-          .status(status === "Blocked" ? 403 : 404)
+          .status(status === UserStatus.BLOCKED ? 403 : 404)
           .json(createAccountStatusErrorResponse(status));
       }
 
-      // Update user's email verified
-      user = await UserService.updateOne(
-        { _id: user._id },
-        { $set: { isEmailVerified: true } }
-      );
+      // update verification token and verification token date
+      if (email) {
+        await UserService.updateById(user._id, {
+          emailVerificationToken: null,
+          emailVerificationTokenExpiresAt: null,
+        });
+      } else {
+        await UserService.updateById(user._id, {
+          phoneVerificationToken: null,
+          phoneVerificationTokenExpiresAt: null,
+        });
+      }
 
-      const formattedUser = new UserDTO(user!);
+      // Set cookies and send response
+      await AuthControllerUtility.setCookies(res, { ...formattedUser });
+
       return res.status(200).json(
         new SuccessResponse({
-          data: formattedUser,
+          data: { user: formattedUser },
           code: Constants.VERIFICATION_SUCCESSFUL,
           message: Constants.VERIFICATION_SUCCESSFUL_MESSAGE,
         })
@@ -404,7 +419,9 @@ class AuthController {
     next: NextFunction
   ) {
     try {
-      const refreshTokenFromCookie = req.cookies[Config.REFRESH_TOKEN_KEY];
+      const refreshTokenFromCookie =
+        req.cookies[Config.REFRESH_TOKEN_KEY] ??
+        req.headers.authorization?.split(" ")[1];
       // Validate refresh token
       let user;
       try {
@@ -425,7 +442,12 @@ class AuthController {
 
       if (typeof user !== "string" && user.email) {
         // Check user's existence
-        user = await UserService.findOneWithEmail({ email: user.email });
+        user = await UserService.findOne({
+          ...(user.email && { email: user.email }),
+          ...(user.phone && { phone: user.phone }),
+        });
+
+        // user = await UserService.findOne({ email: user.email });
         if (!user) {
           return res.status(401).json(
             new ErrorResponse({
@@ -437,23 +459,18 @@ class AuthController {
 
         // Check user's status
         const { status } = user;
-        if (status === "Blocked" || status === "Deleted") {
+        if (status === UserStatus.BLOCKED || status === UserStatus.DELETED) {
           return res.status(401).json(createAccountStatusErrorResponse(status));
         }
 
         // Create UserDTO
         const formattedUser = new UserDTO(user);
 
-        // Delete CustomerId if user's email is not verified
-        if (!formattedUser.isEmailVerified) {
-          delete formattedUser.customerId; // Important delete for security
-        }
-
         // Set cookies and Send response
-        await setCookies(res, { ...formattedUser });
+        await AuthControllerUtility.setCookies(res, { ...formattedUser });
         return res.status(200).json(
           new SuccessResponse({
-            data: formattedUser,
+            data: { user: formattedUser },
             code: Constants.LOGIN_SUCCESS,
             message: Constants.LOGIN_SUCCESS_MESSAGE,
           })
@@ -474,8 +491,12 @@ class AuthController {
   ) {
     try {
       // Check user registered
-      const { email } = req.body;
-      const user = await UserService.findOneWithEmail({ email });
+      const { email, phone, method } = req.body;
+      const user = await UserService.findOne({
+        ...(email && { email }),
+        ...(phone && { phone }),
+      });
+
       if (!user) {
         return res.status(404).json(
           new ErrorResponse({
@@ -487,9 +508,9 @@ class AuthController {
 
       // Check user's status
       const { status } = user;
-      if (status === "Blocked" || status === "Deleted") {
+      if (status === UserStatus.BLOCKED || status === UserStatus.DELETED) {
         return res
-          .status(status === "Blocked" ? 403 : 404)
+          .status(status === UserStatus.BLOCKED ? 403 : 404)
           .json(createAccountStatusErrorResponse(status));
       }
 
@@ -497,7 +518,7 @@ class AuthController {
       const otp = await crypto.randomInt(100000, 1000000);
       const expireTime = Date.now() + 5 * 60 * 1000;
       const data = `${email}.${otp}.${expireTime}`;
-      const hash = HashServices.hash(data);
+      const hash = HashService.hash(data);
 
       // Send OTP via email and send response
       await SendEmailService.sendOTPEmail(email, user.firstName, otp);
@@ -537,7 +558,7 @@ class AuthController {
 
       // Check OTP is correct
       const data = `${email}.${otp}.${expireTime}`;
-      const computedHash = HashServices.hash(data);
+      const computedHash = HashService.hash(data);
 
       if (computedHash !== hashFromFrontend) {
         return res.status(400).json(
@@ -627,8 +648,9 @@ type GenerateTokenAndHashProps = {
   email: string;
   phone: string;
   otp: number;
-  method: string;
+  method: AuthenticationMethod;
   userId: string;
+  expireAt: number;
 };
 
 type HandleUserVerificationProps = {
@@ -646,25 +668,43 @@ class AuthControllerUtility {
     phone,
   }: HandleUserVerificationProps) {
     const otp = await OtpServices.generateOtp();
-    const { token, hash, expireAt } =
-      await AuthControllerUtility.generateTokenAndHash({
-        email,
-        phone,
-        otp,
-        method,
-        userId: user._id.toString(),
-      });
 
-    // Update user with verification token and expiration date
-    await UserService.updateById(user._id, {
-      $set: {
-        verificationToken: token,
-        verificationTokenExpiresAt: expireAt,
-      },
+    // Calculate expire time
+    const expireTimeInSeconds =
+      method === AuthenticationMethod.MAGIC_LINK
+        ? Config.VERIFICATION_TOKEN_EXPIRE_TIME
+        : Config.OTP_EXPIRE_TIME;
+    const expireAt = Date.now() + expireTimeInSeconds * 1000;
+
+    // Generate token and hash
+    const { token, hash } = await AuthControllerUtility.generateTokenAndHash({
+      email,
+      phone,
+      otp,
+      method,
+      expireAt,
+      userId: user._id.toString(),
     });
 
+    // Update user with verification token and expiration date
+    if (email) {
+      await UserService.updateById(user._id, {
+        emailVerificationToken: token,
+        emailVerificationTokenExpiresAt: expireAt,
+      });
+    } else {
+      await UserService.updateById(user._id, {
+        phoneVerificationToken: token,
+        phoneVerificationTokenExpiresAt: expireAt,
+      });
+    }
+
     // Send OTP via the chosen method
-    if (email && method === AuthenticationMethod.MAGIC_LINK) {
+    if (
+      email &&
+      (method === AuthenticationMethod.MAGIC_LINK ||
+        method === AuthenticationMethod.PASSWORD)
+    ) {
       await SendEmailService.sendVerifyEmail(email, user.firstName ?? "", hash);
     } else if (email && method === AuthenticationMethod.EMAIL_OTP) {
       await SendEmailService.sendOTPEmail(email, user.firstName ?? "", otp);
@@ -683,19 +723,16 @@ class AuthControllerUtility {
     otp,
     method,
     userId,
+    expireAt,
   }: GenerateTokenAndHashProps) {
-    // Calculate expire time
-    const expireTimeInSeconds =
-      method === AuthenticationMethod.MAGIC_LINK
-        ? Config.VERIFICATION_TOKEN_EXPIRE_TIME
-        : Config.OTP_EXPIRE_TIME;
-    const expireAt = Date.now() + expireTimeInSeconds * 1000;
-
     // Create data for hashing
     const elements = [email ?? phone, method, userId, expireAt];
 
     // Add OTP if method is other than MAGIC_LINK
-    if (method !== AuthenticationMethod.MAGIC_LINK) {
+    if (
+      method !== AuthenticationMethod.MAGIC_LINK ||
+      method !== AuthenticationMethod.PASSWORD
+    ) {
       elements.push(otp);
     }
 
@@ -703,23 +740,26 @@ class AuthControllerUtility {
     const data = elements.join(".");
 
     // Generate token and hash
-    const token = HashServices.hash(data);
+    const token = HashService.hash(data);
     const hash =
-      HashServices.hash(token, Config.SECONDARY_HASH_SECRET) + "-" + expireAt;
+      HashService.hash(token, Config.SECONDARY_HASH_SECRET) + "-" + expireAt;
 
-    return { token, hash, expireAt }; // Return both token and hash
+    return { token, hash }; // Return both token and hash
   }
 
   public static async setCookies(
     res: Response,
     user: UserDTO,
-    remember: boolean = false
+    remember: boolean = true
   ) {
     // Create token and store in DB
     const { accessToken, refreshToken } = await TokenService.generateTokens(
       user
     );
-    await TokenService.storeRefreshToken({ refreshToken, userId: user._id });
+    await TokenService.storeRefreshToken({
+      token: refreshToken,
+      userId: user._id,
+    });
 
     // Set cookies in response
     res.cookie(Config.ACCESS_TOKEN_KEY, accessToken, {

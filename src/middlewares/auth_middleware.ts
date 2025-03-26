@@ -14,7 +14,9 @@ class AuthMiddleware {
     next: NextFunction
   ) {
     try {
-      const accessToken = req.cookies?.[Config.ACCESS_TOKEN_KEY];
+      const accessToken =
+        req.cookies?.[Config.ACCESS_TOKEN_KEY] ??
+        req.headers.authorization?.split(" ")[1];
 
       if (!accessToken) {
         throw new Error("No token");
