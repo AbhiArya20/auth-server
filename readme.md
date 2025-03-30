@@ -238,8 +238,8 @@ otherwise, we try to authenticate with magic link or otp based on the method.
 
 ### 4. Refresh Token
 
-**Endpoint:** `/v1/refresh-token`
-**Method:** `GET`
+**Endpoint:** `/v1/refresh-token` \
+**Method:** `GET` \
 **Description:** Refreshes the user's authentication token either from cookie or Authorization header.
 
 #### Request Headers
@@ -314,8 +314,8 @@ For that reason, I have not mentioned the request body and response in the below
 
 ### 9. Update Current User
 
-**Endpoint:** `/v1/me`
-**Method:** `PUT`
+**Endpoint:** `/v1/me` \
+**Method:** `PUT` \
 **Description:** Updates the currently authenticated user's profile.
 
 ## Conclusion
