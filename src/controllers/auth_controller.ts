@@ -80,6 +80,8 @@ class AuthController {
       const formattedUser = new UserDTO(user);
       return res.status(200).json(
         new SuccessResponse({
+          code: SUCCESS_RESPONSE_CODE.REGISTRATION_SUCCESS,
+          message: SUCCESS_RESPONSE_MESSAGE.REGISTRATION_SUCCESS_MESSAGE,
           data: {
             email,
             phone,
@@ -89,8 +91,6 @@ class AuthController {
             method,
             user: formattedUser,
           },
-          code: SUCCESS_RESPONSE_CODE.REGISTRATION_SUCCESS,
-          message: SUCCESS_RESPONSE_MESSAGE.REGISTRATION_SUCCESS_MESSAGE,
         })
       );
     } catch (error) {
@@ -172,16 +172,21 @@ class AuthController {
         }
 
         // Set cookies and send response
-        await AuthControllerUtility.setCookies(
-          req,
-          res,
-          { ...formattedUser },
-          remember
-        );
+        const { accessToken, refreshToken } =
+          await AuthControllerUtility.setCookies(
+            req,
+            res,
+            { ...formattedUser },
+            remember
+          );
 
         return res.status(200).json(
           new SuccessResponse({
-            data: { user: formattedUser },
+            data: {
+              accessToken,
+              refreshToken,
+              user: formattedUser,
+            },
             code: SUCCESS_RESPONSE_CODE.LOGIN_SUCCESS,
             message: SUCCESS_RESPONSE_MESSAGE.LOGIN_SUCCESS_MESSAGE,
           })
@@ -424,11 +429,12 @@ class AuthController {
       }
 
       // Set cookies and send response
-      await AuthControllerUtility.setCookies(req, res, { ...formattedUser });
+      const { accessToken, refreshToken } =
+        await AuthControllerUtility.setCookies(req, res, { ...formattedUser });
 
       return res.status(200).json(
         new SuccessResponse({
-          data: { user: formattedUser },
+          data: { accessToken, refreshToken, user: formattedUser },
           code: SUCCESS_RESPONSE_CODE.VERIFICATION_SUCCESSFUL,
           message: SUCCESS_RESPONSE_MESSAGE.VERIFICATION_SUCCESSFUL_MESSAGE,
         })
@@ -493,10 +499,17 @@ class AuthController {
         const formattedUser = new UserDTO(user);
 
         // Set cookies and Send response
-        await AuthControllerUtility.setCookies(req, res, { ...formattedUser });
+        const { accessToken, refreshToken } =
+          await AuthControllerUtility.setCookies(req, res, {
+            ...formattedUser,
+          });
         return res.status(200).json(
           new SuccessResponse({
-            data: { user: formattedUser },
+            data: {
+              accessToken,
+              refreshToken,
+              user: formattedUser,
+            },
             code: SUCCESS_RESPONSE_CODE.REFRESH_TOKEN_SUCCESS,
             message: SUCCESS_RESPONSE_MESSAGE.REFRESH_TOKEN_SUCCESS_MESSAGE,
           })
@@ -676,11 +689,16 @@ class AuthController {
       });
 
       // Set cookies and send response
-      await AuthControllerUtility.setCookies(req, res, { ...formattedUser });
+      const { accessToken, refreshToken } =
+        await AuthControllerUtility.setCookies(req, res, { ...formattedUser });
 
       return res.status(200).json(
         new SuccessResponse({
-          data: { user: formattedUser },
+          data: {
+            accessToken,
+            refreshToken,
+            user: formattedUser,
+          },
           code: SUCCESS_RESPONSE_CODE.FORGOT_PASSWORD_SUCCESSFUL,
           message: SUCCESS_RESPONSE_MESSAGE.FORGOT_PASSWORD_SUCCESSFUL_MESSAGE,
         })
@@ -906,7 +924,6 @@ class AuthControllerUtility {
     );
 
     const userAgent = UAParser(req.headers["user-agent"]);
-    console.log(userAgent);
 
     await TokenService.storeRefreshToken({
       token: refreshToken,
@@ -932,6 +949,8 @@ class AuthControllerUtility {
       secure: Config.IS_SECURE,
       sameSite: "lax",
     });
+
+    return { accessToken, refreshToken };
   }
 }
 

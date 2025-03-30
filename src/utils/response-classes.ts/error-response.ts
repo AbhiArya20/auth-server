@@ -8,8 +8,8 @@ import { ZodError } from "zod";
 import { isMethodForMagicLink } from "@/utils/method";
 class ErrorResponse<T> {
   success: boolean;
-  code?: string;
-  message?: string;
+  code: string;
+  message: string;
   error?: T;
   constructor(response: { code: string; message: string; error?: T }) {
     this.success = false;
