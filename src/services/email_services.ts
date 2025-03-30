@@ -55,7 +55,7 @@ export class SendEmailService {
   ) {
     const emailServiceInstance = EmailService.getInstance();
 
-    const verificationLink = `${Config.FRONTEND_URL}/verify?hash=${hash}&email=${email}&method=${method}`;
+    const verificationLink = `${Config.FRONTEND_URL}/verify?token=${hash}&email=${email}&method=${method}`;
 
     emailServiceInstance.sendEmailHtml(
       email,

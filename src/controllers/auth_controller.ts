@@ -61,12 +61,14 @@ class AuthController {
       });
 
       // Send token or otp depending on the method, and save verificationToken and verificationTokenExpiresAt in database.
-      const { hash } = await AuthControllerUtility.sendVerificationDetails({
-        user,
-        method,
-        email,
-        phone,
-      });
+      const { userToken } = await AuthControllerUtility.sendVerificationDetails(
+        {
+          user,
+          method,
+          email,
+          phone,
+        }
+      );
 
       // create DTO and send response
       const formattedUser = new UserDTO(user);
@@ -75,7 +77,9 @@ class AuthController {
           data: {
             email,
             phone,
-            hash: isMethodForMagicLink(method) ? undefined : hash,
+            verificationToken: isMethodForMagicLink(method)
+              ? undefined
+              : userToken,
             method,
             user: formattedUser,
           },
@@ -819,30 +823,31 @@ class AuthControllerUtility {
     const expireAt = Date.now() + expireTimeInSeconds * 1000;
 
     // Generate token and hash
-    const { token, hash } = await AuthControllerUtility.generateTokenAndHash({
-      email,
-      phone,
-      otp,
-      method,
-      expireAt,
-      userId: user._id.toString(),
-    });
+    const { dbToken, userToken } =
+      await AuthControllerUtility.generateTokenAndHash({
+        email,
+        phone,
+        otp,
+        method,
+        expireAt,
+        userId: user._id.toString(),
+      });
 
     if (forgotPassword) {
       await UserService.updateById(user._id, {
-        passwordResetToken: token,
+        passwordResetToken: dbToken,
         passwordResetExpiresAt: expireAt,
       });
     } else {
       // Update user with verification token and expiration date
       if (email) {
         await UserService.updateById(user._id, {
-          emailVerificationToken: token,
+          emailVerificationToken: dbToken,
           emailVerificationTokenExpiresAt: expireAt,
         });
       } else {
         await UserService.updateById(user._id, {
-          phoneVerificationToken: token,
+          phoneVerificationToken: dbToken,
           phoneVerificationTokenExpiresAt: expireAt,
         });
       }
@@ -857,7 +862,7 @@ class AuthControllerUtility {
       await SendEmailService.sendVerifyEmail(
         email,
         user.firstName ?? "",
-        hash,
+        userToken,
         method,
         forgotPassword
       );
@@ -869,7 +874,7 @@ class AuthControllerUtility {
       await OtpServices.sendOtpViaWhatsapp(phone, otp);
     }
 
-    return { hash: hash };
+    return { userToken };
   }
 
   public static async generateTokenAndHash({
@@ -895,10 +900,10 @@ class AuthControllerUtility {
     const data = elements.join(".");
 
     // Generate token and hash
-    const token = HashService.hash(data);
-    const hash = HashService.hash(token, Config.SECONDARY_HASH_SECRET);
+    const dbToken = HashService.hash(data);
+    const userToken = HashService.hash(dbToken, Config.SECONDARY_HASH_SECRET);
 
-    return { token, hash }; // Return both token and hash
+    return { dbToken, userToken }; // Return both token and hash
   }
 
   public static async setCookies(
