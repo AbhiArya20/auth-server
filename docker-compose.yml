@@ -11,10 +11,11 @@ services:
     image: mongo:latest
     container_name: mongo
     volumes:
-      - mongodb_data:/data/db
+      - mongodb:/data/db
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=user
-      - MONGO_INITDB_ROOT_PASSWORD=password
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: auth
     networks:
       - auth
 
