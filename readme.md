@@ -45,7 +45,7 @@ We provides an overview of the authentication controller, detailing the availabl
 **Success Response** \
 Every successful response will have the following structure:
 
-```json
+```js
 {
   "success": true,
   "code": "SUCCESS",
@@ -58,13 +58,14 @@ Every successful response will have the following structure:
 **Error Response** \
 Every error response will have the following structure:
 
-````json
+```js
 {
   "success": false,
   "code": "ERROR_CODE",
   "message": "Error Message",
   "error": zodError || Error // optional
 }
+```
 
 ### Endpoints
 
@@ -76,7 +77,7 @@ Every error response will have the following structure:
 
 #### Request Body
 
-```json
+```js
 {
   "firstName": "Abhishek",  // optional
   "lastName": "Kumar"       // optional
@@ -88,13 +89,13 @@ Every error response will have the following structure:
   "password": "Abhishek@123",
   "method": "PASSWORD",  // enum { "MAGIC_LINK", "PASSWORD", "EMAIL_OTP", "SMS_OTP" , "WHATSAPP_OTP" }
 }
-````
+```
 
 #### Response
 
 **Success (200 Created):**
 
-```json
+```js
 {
   "success": true,
   "code": "REGISTRATION_SUCCESSFUL",
@@ -124,7 +125,7 @@ Every error response will have the following structure:
 
 **Failure (400 Bad Request):**
 
-```json
+```js
 {
   "success": false,
   "code": "USER_ALREADY_REGISTERED",
@@ -147,7 +148,7 @@ otherwise, we try to authenticate with magic link or otp based on the method.
 
 #### Request Body
 
-```json
+```js
 {
   "email": "github.abhiarya@gmail.com",
   // OR
@@ -162,7 +163,7 @@ otherwise, we try to authenticate with magic link or otp based on the method.
 
 **Success (200 OK):**
 
-```json
+```js
 {
   // ... success response ...
   "data": {
@@ -177,7 +178,7 @@ otherwise, we try to authenticate with magic link or otp based on the method.
 
 **Failure (401 Unauthorized):**
 
-```json
+```js
 {
   "success": false,
   "code": "INVALID_CREDENTIALS",
@@ -196,7 +197,7 @@ otherwise, we try to authenticate with magic link or otp based on the method.
 
 #### Request Body
 
-```json
+```js
 {
   "email": "github.abhiarya@gmail.com",
   // OR
@@ -211,7 +212,7 @@ otherwise, we try to authenticate with magic link or otp based on the method.
 
 **Success (200 OK):**
 
-```json
+```js
 {
   // ... success response ...
   "data": {
@@ -226,7 +227,7 @@ otherwise, we try to authenticate with magic link or otp based on the method.
 
 **Failure (400 Bad Request):**
 
-```json
+```js
 {
   "code": "INVALID_VERIFICATION_TOKEN",
   "message": "Verification token is invalid or expired."
@@ -243,7 +244,7 @@ otherwise, we try to authenticate with magic link or otp based on the method.
 
 #### Request Headers
 
-```json
+```js
 {
   "Authorization": "Bearer refresh_token"
 }
@@ -253,7 +254,7 @@ otherwise, we try to authenticate with magic link or otp based on the method.
 
 **Success (200 OK):**
 
-```json
+```js
 {
   "code": "REFRESH_TOKEN_SUCCESS",
   "message": "Token refreshed successfully.",
@@ -266,7 +267,7 @@ otherwise, we try to authenticate with magic link or otp based on the method.
 
 **Failure (401 Unauthorized):**
 
-```json
+```js
 {
   "code": "INVALID_REFRESH_TOKEN",
   "message": "Invalid or expired refresh token."
@@ -321,8 +322,12 @@ For that reason, I have not mentioned the request body and response in the below
 
 This authentication controller provides secure user authentication, including registration, login, verification, password reset, and session management.
 
-This auth-server project covers Authentication using.
+This auth-server project covers both web and device(mobile/desktop) Authentication using.
 Email OTP
+SMS OTP
+WhatsApp OTP
+Magic Link
+PASSWORD
 
 Built using the following technologies:
 
