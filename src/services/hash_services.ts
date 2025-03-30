@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import Config from "@/config/config.js";
+import Config from "@/config/config";
 
 class HashService {
   static hash(data: string, key = Config.PRIMARY_HASH_SECRET): string {

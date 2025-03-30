@@ -1,6 +1,6 @@
-import Config from "@/config/config.js"; // Always on top of all imports as it contains configuration from .env files
+import Config from "@/config/config"; // Always on top of all imports as it contains configuration from .env files
 import http from "http";
-import Server from "@/server.js";
+import Server from "@/server";
 import { logger } from "@/utils/logger/logger";
 
 const server = http.createServer(await Server.createServer());

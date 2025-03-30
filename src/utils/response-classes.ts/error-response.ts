@@ -3,7 +3,7 @@ import {
   ERROR_RESPONSE_CODE,
   ERROR_RESPONSE_MESSAGE,
   USER_STATUS,
-} from "@/utils/constants.js";
+} from "@/utils/constants";
 import { ZodError } from "zod";
 import { isMethodForMagicLink } from "@/utils/method";
 class ErrorResponse<T> {

@@ -1,5 +1,5 @@
 import { S3Client } from "@aws-sdk/client-s3";
-import Config from "@/config/config.js";
+import Config from "@/config/config";
 
 const s3Client = new S3Client({
   region: Config.AWS_REGION,

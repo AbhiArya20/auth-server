@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import Config from "@/config/config.js";
+import Config from "@/config/config";
 import { logger } from "@/utils/logger/logger";
 
 async function dbConnect() {

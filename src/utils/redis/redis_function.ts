@@ -1,5 +1,5 @@
-import Config from "@/config/config.js";
-import RedisClient from "@/config/redis.js";
+import Config from "@/config/config";
+import RedisClient from "@/config/redis";
 
 class RedisFunctions {
   public static async get<T>(

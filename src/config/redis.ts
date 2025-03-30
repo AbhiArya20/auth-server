@@ -1,6 +1,6 @@
 import Redis from "ioredis";
 import { RedisOptions } from "ioredis";
-import Config from "@/config/config.js";
+import Config from "@/config/config";
 
 const redisOptions: RedisOptions = {
   port: Config.REDIS_PORT,

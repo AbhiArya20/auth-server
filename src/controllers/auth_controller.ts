@@ -1,7 +1,7 @@
 import { Response, Request, NextFunction } from "express";
-import Config from "@/config/config.js";
-import TokenService from "@/services/token_services.js";
-import UserService from "@/services/user_services.js";
+import Config from "@/config/config";
+import TokenService from "@/services/token_services";
+import UserService from "@/services/user_services";
 import bcrypt from "bcrypt";
 import {
   AUTHENTICATION_METHOD,
@@ -10,17 +10,17 @@ import {
   SUCCESS_RESPONSE_CODE,
   SUCCESS_RESPONSE_MESSAGE,
   USER_STATUS,
-} from "@/utils/constants.js";
+} from "@/utils/constants";
 import ErrorResponse, {
   createAccountStatusErrorResponse,
   createInvalidRefreshTokenErrorResponse,
   createInvalidVerificationTokenErrorResponse,
   createOtpUsedErrorResponse,
-} from "@/utils/response-classes.ts/error-response.js";
-import UserDTO from "@/dtos/user_dto.js";
-import { SuccessResponse } from "@/utils/response-classes.ts/success-response.js";
-import { SendEmailService } from "@/services/email_services.js";
-import HashService from "@/services/hash_services.js";
+} from "@/utils/response-classes.ts/error-response";
+import UserDTO from "@/dtos/user_dto";
+import { SuccessResponse } from "@/utils/response-classes.ts/success-response";
+import { SendEmailService } from "@/services/email_services";
+import HashService from "@/services/hash_services";
 import OtpServices from "@/services/otp_services";
 import { IUserSchema } from "@/models/user_model";
 import { UAParser } from "ua-parser-js";
@@ -809,11 +809,9 @@ class AuthControllerUtility {
     const otp = await OtpServices.generateOtp();
 
     // Calculate expire time
-    const expireTimeInSeconds =
-      method === AUTHENTICATION_METHOD.MAGIC_LINK ||
-      method === AUTHENTICATION_METHOD.PASSWORD
-        ? Config.VERIFICATION_TOKEN_EXPIRE_TIME
-        : Config.OTP_EXPIRE_TIME;
+    const expireTimeInSeconds = isMethodForMagicLink(method)
+      ? Config.VERIFICATION_TOKEN_EXPIRE_TIME
+      : Config.OTP_EXPIRE_TIME;
     const expireAt = Date.now() + expireTimeInSeconds * 1000;
 
     // Generate token and hash
@@ -848,11 +846,7 @@ class AuthControllerUtility {
     }
 
     // Send OTP via the chosen method
-    if (
-      email &&
-      (method === AUTHENTICATION_METHOD.MAGIC_LINK ||
-        method === AUTHENTICATION_METHOD.PASSWORD)
-    ) {
+    if (isMethodForMagicLink(method) && email) {
       await SendEmailService.sendVerifyEmail(
         email,
         user.firstName ?? "",

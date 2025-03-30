@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from "express";
-import RedisClient from "@/config/redis.js";
-import RedisKeys from "@/utils/redis/redis_keys.js";
+import RedisClient from "@/config/redis";
+import RedisKeys from "@/utils/redis/redis_keys";
 import ErrorResponse, {
   createServerErrorResponse,
-} from "@/utils/response-classes.ts/error-response.js";
+} from "@/utils/response-classes.ts/error-response";
 import { logger } from "@/utils/logger/logger";
 
 const rateLimiterMiddleware = (

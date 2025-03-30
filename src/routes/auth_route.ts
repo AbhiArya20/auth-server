@@ -1,8 +1,8 @@
 import express from "express";
-import AuthValidator from "@/validators/auth_validator.js";
-import AuthController from "@/controllers/auth_controller.js";
-import { rateLimiterMiddleware } from "@/middlewares/rate_limiter_middleware.js";
-import Config from "@/config/config.js";
+import AuthValidator from "@/validators/auth_validator";
+import AuthController from "@/controllers/auth_controller";
+import { rateLimiterMiddleware } from "@/middlewares/rate_limiter_middleware";
+import Config from "@/config/config";
 import AuthMiddleware from "@/middlewares/auth_middleware";
 import { uploadMiddleware } from "@/middlewares/file_upload_middleware";
 

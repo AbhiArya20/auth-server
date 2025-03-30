@@ -1,6 +1,6 @@
 import { Response, Request, NextFunction } from "express";
 import { z } from "zod";
-import { createValidationErrorResponse } from "@/utils/response-classes.ts/error-response.js";
+import { createValidationErrorResponse } from "@/utils/response-classes.ts/error-response";
 import { AUTHENTICATION_METHOD } from "@/utils/constants";
 import { isEmailMethod, isPhoneMethod } from "@/utils/method";
 

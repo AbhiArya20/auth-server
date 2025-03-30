@@ -1,7 +1,7 @@
 import nodemailer, { Transporter } from "nodemailer";
-import Config from "@/config/config.js";
+import Config from "@/config/config";
 import SMTPTransport from "nodemailer/lib/smtp-transport";
-import StringFunction from "@/utils/string_functions.js";
+import StringFunction from "@/utils/string_functions";
 import { AUTHENTICATION_METHOD } from "@/utils/constants";
 import { formatDistanceToNow } from "date-fns";
 
@@ -56,7 +56,7 @@ export class SendEmailService {
     const emailServiceInstance = EmailService.getInstance();
 
     const verificationLink = `${Config.FRONTEND_URL}/verify?token=${hash}&email=${email}&method=${method}`;
-
+    // TODO: Fix Send email for every method
     emailServiceInstance.sendEmailHtml(
       email,
       `<!doctype html>

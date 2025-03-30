@@ -1,6 +1,6 @@
-import { IImages, IUserSchema } from "@/models/user_model.js";
+import { IImages, IUserSchema } from "@/models/user_model";
 import { USER_ROLE, USER_STATUS } from "@/utils/constants";
-import StringFunction from "@/utils/string_functions.js";
+import StringFunction from "@/utils/string_functions";
 
 class UserDTO {
   _id: string;

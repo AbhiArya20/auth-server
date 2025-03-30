@@ -1,4 +1,4 @@
-import UserDTO from "@/dtos/user_dto.js";
+import UserDTO from "@/dtos/user_dto";
 import { ObjectId } from "mongoose";
 
 declare module "express-serve-static-core" {

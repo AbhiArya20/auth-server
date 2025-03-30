@@ -1,10 +1,10 @@
 import jwt from "jsonwebtoken";
 import { ObjectId, UpdateQuery, FilterQuery } from "mongoose";
-import Config from "@/config/config.js";
+import Config from "@/config/config";
 import RefreshTokenModel, {
   IRefreshTokenSchema,
-} from "@/models/refresh_token_model.js";
-import UserDTO from "@/dtos/user_dto.js";
+} from "@/models/refresh_token_model";
+import UserDTO from "@/dtos/user_dto";
 
 class TokenService {
   // Verify Access Token

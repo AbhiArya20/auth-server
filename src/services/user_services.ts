@@ -1,7 +1,7 @@
 import { FilterQuery, ObjectId, UpdateQuery } from "mongoose";
-import UserModel, { IUserSchema } from "@/models/user_model.js";
-import RedisFunctions from "@/utils/redis/redis_function.js";
-import RedisKeys from "@/utils/redis/redis_keys.js";
+import UserModel, { IUserSchema } from "@/models/user_model";
+import RedisFunctions from "@/utils/redis/redis_function";
+import RedisKeys from "@/utils/redis/redis_keys";
 
 class UserService {
   public static async find(

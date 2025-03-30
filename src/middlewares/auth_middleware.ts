@@ -1,14 +1,14 @@
 import { Request, Response, NextFunction } from "express";
-import TokenService from "@/services/token_services.js";
-import Config from "@/config/config.js";
+import TokenService from "@/services/token_services";
+import Config from "@/config/config";
 import {
   ERROR_RESPONSE_CODE,
   ERROR_RESPONSE_MESSAGE,
   USER_STATUS,
-} from "@/utils/constants.js";
+} from "@/utils/constants";
 import ErrorResponse, {
   createAccountStatusErrorResponse,
-} from "@/utils/response-classes.ts/error-response.js";
+} from "@/utils/response-classes.ts/error-response";
 import mongoose from "mongoose";
 import { logger } from "@/utils/logger/logger";
 

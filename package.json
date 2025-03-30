@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npx tsc",
+    "build": "tsc && tsc-alias",
     "clean": "rm -rf dist",
     "dev": "npx tsx --watch src/index.ts ",
     "lint": "tsc --noEmit && eslint \"src/**/*.ts*\" --max-warnings 0",
-    "start": "node -r esbuild-register ./src/index.ts",
+    "start": "node -r esbuild-register ./dist/index.js",
     "dev:docker": "docker-compose -f docker-compose-dev.yml up"
   },
   "dependencies": {
@@ -56,8 +56,12 @@
     "globals": "^16.0.0",
     "nodemon": "^3.1.0",
     "ts-node": "^10.9.2",
+    "ts-patch": "^3.3.0",
+    "tsc-alias": "^1.8.13",
+    "tsconfig-paths": "^4.2.0",
     "tsx": "^4.19.2",
     "typescript": "5.5.4",
-    "typescript-eslint": "^8.27.0"
+    "typescript-eslint": "^8.27.0",
+    "typescript-transform-paths": "^3.5.5"
   }
 }

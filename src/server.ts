@@ -3,18 +3,15 @@ import bodyParser from "body-parser";
 import cookieParser from "cookie-parser";
 import { queryParser } from "express-query-parser";
 import cors, { CorsOptions } from "cors";
-import dbConnect from "@/config/database.js";
+import dbConnect from "@/config/database";
 import morgan from "morgan";
-import { rateLimiterMiddleware } from "@/middlewares/rate_limiter_middleware.js";
-import AuthRouter from "@/routes/auth_route.js";
+import { rateLimiterMiddleware } from "@/middlewares/rate_limiter_middleware";
+import AuthRouter from "@/routes/auth_route";
 import ErrorResponse, {
   createServerErrorResponse,
-} from "@/utils/response-classes.ts/error-response.js";
-import {
-  ERROR_RESPONSE_CODE,
-  ERROR_RESPONSE_MESSAGE,
-} from "@/utils/constants.js";
-import Config from "@/config/config.js";
+} from "@/utils/response-classes.ts/error-response";
+import { ERROR_RESPONSE_CODE, ERROR_RESPONSE_MESSAGE } from "@/utils/constants";
+import Config from "@/config/config";
 import helmet from "helmet";
 import multer from "multer";
 import { logger } from "@/utils/logger/logger";
