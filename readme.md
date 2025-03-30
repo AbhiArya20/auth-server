@@ -53,6 +53,7 @@ Every successful response will have the following structure:
   "data": {
     // data returned by the endpoint in the response like user, token, etc.
   }
+}
 ```
 
 **Error Response** \
