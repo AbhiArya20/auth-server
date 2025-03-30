@@ -199,12 +199,14 @@ class AuthController {
       }
 
       // Send token or otp depending on the method, and save verificationToken and verificationTokenExpiresAt in database.
-      const { hash } = await AuthControllerUtility.sendVerificationDetails({
-        user,
-        method,
-        email,
-        phone,
-      });
+      const { userToken } = await AuthControllerUtility.sendVerificationDetails(
+        {
+          user,
+          method,
+          email,
+          phone,
+        }
+      );
 
       // Create DTO and send response
       const formattedUser = new UserDTO(user);
@@ -213,7 +215,9 @@ class AuthController {
           data: {
             email,
             phone,
-            hash: isMethodForMagicLink(method) ? undefined : hash,
+            verificationToken: isMethodForMagicLink(method)
+              ? undefined
+              : userToken,
             method,
             user: formattedUser,
           },
