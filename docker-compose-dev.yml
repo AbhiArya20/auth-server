@@ -18,7 +18,6 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: password
-      MONGO_INITDB_DATABASE: auth
     networks:
       - auth
 
@@ -31,7 +30,7 @@ services:
     environment:
       ME_CONFIG_MONGODB_ADMINUSERNAME: admin
       ME_CONFIG_MONGODB_ADMINPASSWORD: password
-      ME_CONFIG_MONGODB_URL: mongodb://admin:password@mongodb:27017/auth
+      ME_CONFIG_MONGODB_URL: mongodb://admin:password@mongodb:27017
       ME_CONFIG_BASICAUTH: false
     depends_on:
       - mongodb
@@ -40,6 +39,9 @@ services:
 
   auth-server:
     container_name: auth-server-dev
+    working_dir: /app
+    stdin_open: true
+    tty: true
     build:
       context: .
       dockerfile: ./Dockerfile.dev
@@ -57,7 +59,7 @@ services:
       - NODE_ENV=development
     networks:
       - auth
-    command: ["npm", "run", "dev"]
+    command: npm run dev
 
 volumes:
   mongodb:

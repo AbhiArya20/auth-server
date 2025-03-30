@@ -40,7 +40,7 @@ class AuthMiddleware {
 
       // Check if user is blocked or deleted
       if (
-        user.status === USER_STATUS.ACTIVE ||
+        user.status === USER_STATUS.BLOCKED ||
         user.status === USER_STATUS.DELETED
       ) {
         return res
@@ -49,7 +49,7 @@ class AuthMiddleware {
       }
 
       // Check if user is verified or not
-      if (!user.isEmailVerified) {
+      if (!user.isEmailVerified && !user.isPhoneVerified) {
         return res.status(401).json(
           new ErrorResponse({
             code: ERROR_RESPONSE_CODE.UNVERIFIED_USER,

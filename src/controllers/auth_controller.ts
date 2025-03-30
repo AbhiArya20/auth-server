@@ -341,6 +341,14 @@ class AuthController {
         );
       }
 
+      if (isMethodForOTP(method)) {
+        const key = user._id.toString() + ":" + method + ":" + otp;
+        const isUsed = await OtpServices.isUsed(key);
+        if (isUsed) {
+          return res.status(406).json(createOtpUsedErrorResponse());
+        }
+      }
+
       const dbVerificationToken = isEmailMethod(method)
         ? user.emailVerificationToken
         : user.phoneVerificationToken;
@@ -395,18 +403,10 @@ class AuthController {
           .json(createInvalidVerificationTokenErrorResponse(method));
       }
 
-      if (isMethodForOTP(method)) {
-        const key = user._id.toString() + ":" + method + ":" + otp;
-        const isUsed = await OtpServices.isUsed(key);
-        if (isUsed) {
-          return res.status(406).json(createOtpUsedErrorResponse());
-        }
-      }
-
       const formattedUser = new UserDTO(user);
 
       // If user is blocked or deleted
-      const { status } = formattedUser;
+      const { status, isEmailVerified, isPhoneVerified } = formattedUser;
       if (status === USER_STATUS.BLOCKED || status === USER_STATUS.DELETED) {
         return res
           .status(status === USER_STATUS.BLOCKED ? 403 : 404)
@@ -416,15 +416,19 @@ class AuthController {
       // update verification token and verification token date
       if (email) {
         await UserService.updateById(user._id, {
-          emailVerificationToken: null,
-          emailVerificationTokenExpiresAt: null,
-          isEmailVerified: Date.now(),
+          $set: {
+            emailVerificationToken: null,
+            emailVerificationTokenExpiresAt: null,
+            isEmailVerified: isEmailVerified ? null : Date.now(),
+          },
         });
       } else {
         await UserService.updateById(user._id, {
-          phoneVerificationToken: null,
-          phoneVerificationTokenExpiresAt: null,
-          isPhoneVerified: Date.now(),
+          $set: {
+            phoneVerificationToken: null,
+            phoneVerificationTokenExpiresAt: null,
+            isPhoneVerified: isPhoneVerified ? null : Date.now(),
+          },
         });
       }
 
@@ -598,7 +602,7 @@ class AuthController {
         method,
         verificationToken: userVerificationToken,
         otp,
-        newPassword,
+        password,
       } = req.body;
 
       // Get user from database
@@ -612,7 +616,7 @@ class AuthController {
         return res.status(404).json(
           new ErrorResponse({
             code: ERROR_RESPONSE_CODE.USER_NOT_REGISTER,
-            message: ERROR_RESPONSE_MESSAGE.USER_REGISTERED_MESSAGE,
+            message: ERROR_RESPONSE_MESSAGE.USER_NOT_FOUND_MESSAGE,
           })
         );
       }
@@ -683,9 +687,11 @@ class AuthController {
       // update verification token and verification token date
 
       await UserService.updateById(user._id, {
-        password: newPassword,
-        passwordResetToken: null,
-        passwordResetExpiresAt: null,
+        $set: {
+          password: password,
+          passwordResetToken: null,
+          passwordResetExpiresAt: null,
+        },
       });
 
       // Set cookies and send response
@@ -714,7 +720,7 @@ class AuthController {
       const refreshToken =
         req.cookies[Config.REFRESH_TOKEN_KEY] ??
         req.headers.authorization?.split(" ")[1];
-      await TokenService.removeRefreshToken(refreshToken, req._id!.toString());
+      await TokenService.removeRefreshToken(refreshToken, req._id?.toString());
       res.clearCookie(Config.ACCESS_TOKEN_KEY);
       res.clearCookie(Config.REFRESH_TOKEN_KEY);
       return res.status(200).json(
@@ -770,9 +776,11 @@ class AuthController {
       const { firstName, lastName, avatar } = req.body;
 
       const user = await UserService.updateById(req._id!, {
-        firstName,
-        lastName,
-        avatar,
+        $set: {
+          firstName,
+          lastName,
+          avatar,
+        },
       });
       if (!user) {
         return res.status(404).json(
@@ -845,20 +853,26 @@ class AuthControllerUtility {
 
     if (forgotPassword) {
       await UserService.updateById(user._id, {
-        passwordResetToken: dbToken,
-        passwordResetExpiresAt: expireAt,
+        $set: {
+          passwordResetToken: dbToken,
+          passwordResetExpiresAt: expireAt,
+        },
       });
     } else {
       // Update user with verification token and expiration date
       if (email) {
         await UserService.updateById(user._id, {
-          emailVerificationToken: dbToken,
-          emailVerificationTokenExpiresAt: expireAt,
+          $set: {
+            emailVerificationToken: dbToken,
+            emailVerificationTokenExpiresAt: expireAt,
+          },
         });
       } else {
         await UserService.updateById(user._id, {
-          phoneVerificationToken: dbToken,
-          phoneVerificationTokenExpiresAt: expireAt,
+          $set: {
+            phoneVerificationToken: dbToken,
+            phoneVerificationTokenExpiresAt: expireAt,
+          },
         });
       }
     }

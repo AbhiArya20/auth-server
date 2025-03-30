@@ -70,8 +70,8 @@ const otpZod = z
   .max(999999, { message: "OTP must be a 6-digit number." });
 
 const avatarZod = z.object({
-  image: z.string().url(),
-  etag: z.string(),
+  image: z.string().url().optional(),
+  etag: z.string().optional(),
 });
 
 const methodZod = z.enum(
@@ -235,14 +235,18 @@ const forgotPasswordZodSchema = z
     superRefined({ email, phone, method }, ctx)
   );
 
-const forgotPasswordVerifyZodSchema = z.object({
-  email: emailZod,
-  phone: phoneZod,
-  method: methodZod,
-  verificationToken: verificationTokenZod,
-  otp: otpZod,
-  newPassword: passwordZod,
-});
+const forgotPasswordVerifyZodSchema = z
+  .object({
+    email: emailZod.optional(),
+    phone: phoneZod.optional(),
+    method: methodZod.exclude([AUTHENTICATION_METHOD.PASSWORD]),
+    verificationToken: verificationTokenZod,
+    otp: otpZod.optional(),
+    password: passwordZod,
+  })
+  .superRefine(({ email, phone, method }, ctx) =>
+    superRefined({ email, phone, method }, ctx)
+  );
 
 const updateUserZodSchema = z.object({
   firstName: firstNameZod.optional(),
@@ -308,11 +312,13 @@ class AuthValidator {
   }
 
   public static updateUser(req: Request, res: Response, next: NextFunction) {
-    const { location, etag } = req.file;
-    req.body.avatar = {
-      image: location,
-      etag,
-    };
+    if (req.file) {
+      const { location, etag } = req.file;
+      req.body.avatar = {
+        image: location,
+        etag,
+      };
+    }
     const { error, data } = updateUserZodSchema.safeParse(req.body);
     if (error)
       return res.status(400).json(createValidationErrorResponse(error));

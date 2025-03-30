@@ -27,4 +27,6 @@ RUN adduser --system --uid 1001 expressjs
 USER expressjs
 COPY --from=builder /app/dist .
 
+EXPOSE 5000
+
 CMD node app/dist/index.js

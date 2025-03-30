@@ -12,15 +12,15 @@ services:
     container_name: mongo
     volumes:
       - mongodb:/data/db
+    ports:
+      - "27017:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: password
-      MONGO_INITDB_DATABASE: auth
     networks:
       - auth
 
   auth-server:
-    container_name: auth-server
     build:
       context: .
       dockerfile: ./Dockerfile
@@ -28,23 +28,13 @@ services:
     depends_on:
       - mongodb
       - redis
-    networks:
-      - auth
-
-  reverse-proxy:
-    container_name: reverse-proxy
-    build: ./nginx
-    depends_on:
-      - auth-server
     ports:
-      - "443:443"
+      - "5000:5000"
     networks:
       - auth
-    volumes:
-      - /etc/letsencrypt:/etc/letsencrypt
 
 volumes:
-  mongodb_data:
+  mongodb:
 
 networks:
   auth:

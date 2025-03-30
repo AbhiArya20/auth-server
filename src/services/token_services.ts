@@ -45,11 +45,11 @@ class TokenService {
   // Remove RefreshToken
   public static async removeRefreshToken(
     refreshToken: string,
-    userId: string | ObjectId
+    userId: string | ObjectId | undefined
   ) {
     return await RefreshTokenModel.findOneAndDelete({
-      userId,
       token: refreshToken,
+      ...(userId && { userId }),
     });
   }
 }
