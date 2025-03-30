@@ -8,50 +8,37 @@ import { uploadMiddleware } from "@/middlewares/file_upload_middleware";
 
 const AuthRouter = express.Router();
 
+const rateLimiter = rateLimiterMiddleware(
+  Config.MAX_REQUEST_ROUTES,
+  Config.WINDOW_SECONDS_ROUTES,
+  Config.BLOCKED_FOR_SECONDS_ROUTES,
+  "Auth"
+);
+
 AuthRouter.post(
   "/register",
-  rateLimiterMiddleware(
-    Config.MAX_REQUEST_ROUTES,
-    Config.WINDOW_SECONDS_ROUTES,
-    Config.BLOCKED_FOR_SECONDS_ROUTES,
-    "Auth"
-  ),
+  rateLimiter,
   AuthValidator.register,
   AuthController.register
 );
 
 AuthRouter.post(
   "/login",
-  rateLimiterMiddleware(
-    Config.MAX_REQUEST_ROUTES,
-    Config.WINDOW_SECONDS_ROUTES,
-    Config.BLOCKED_FOR_SECONDS_ROUTES,
-    "Auth"
-  ),
+  rateLimiter,
   AuthValidator.login,
   AuthController.login
 );
 
 AuthRouter.post(
   "/resend",
-  rateLimiterMiddleware(
-    Config.MAX_REQUEST_ROUTES,
-    Config.WINDOW_SECONDS_ROUTES,
-    Config.BLOCKED_FOR_SECONDS_ROUTES,
-    "Auth"
-  ),
+  rateLimiter,
   AuthValidator.resend,
   AuthController.resend
 );
 
 AuthRouter.post(
   "/verify",
-  rateLimiterMiddleware(
-    Config.MAX_REQUEST_ROUTES,
-    Config.WINDOW_SECONDS_ROUTES,
-    Config.BLOCKED_FOR_SECONDS_ROUTES,
-    "Auth"
-  ),
+  rateLimiter,
   AuthValidator.verify,
   AuthController.verify
 );
@@ -62,25 +49,14 @@ AuthRouter.get("/logout", AuthController.logout);
 
 AuthRouter.post(
   "/forgot-password",
-  rateLimiterMiddleware(
-    Config.MAX_REQUEST_ROUTES,
-    Config.WINDOW_SECONDS_ROUTES,
-    Config.BLOCKED_FOR_SECONDS_ROUTES,
-    "Auth"
-  ),
+  rateLimiter,
   AuthValidator.forgotPassword,
   AuthController.forgotPassword
 );
 
-// Verify OTP sent to user's registered email address to reset password
 AuthRouter.post(
   "/forgot-password-verify",
-  rateLimiterMiddleware(
-    Config.MAX_REQUEST_ROUTES,
-    Config.WINDOW_SECONDS_ROUTES,
-    Config.BLOCKED_FOR_SECONDS_ROUTES,
-    "Auth"
-  ),
+  rateLimiter,
   AuthValidator.forgotPasswordVerify,
   AuthController.forgotPasswordVerify
 );

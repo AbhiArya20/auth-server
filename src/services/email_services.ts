@@ -2,7 +2,9 @@ import nodemailer, { Transporter } from "nodemailer";
 import Config from "@/config/config.js";
 import SMTPTransport from "nodemailer/lib/smtp-transport";
 import StringFunction from "@/utils/string_functions.js";
-import { AuthenticationMethod } from "@/utils/constants";
+import { AUTHENTICATION_METHOD } from "@/utils/constants";
+import { formatDistanceToNow } from "date-fns";
+
 class EmailService {
   // Static property to hold the instance
   private static instance: EmailService;
@@ -47,11 +49,13 @@ export class SendEmailService {
   public static async sendVerifyEmail(
     email: string,
     name: string,
-    hash: string
+    hash: string,
+    method: AUTHENTICATION_METHOD,
+    forgotPassword: boolean
   ) {
     const emailServiceInstance = EmailService.getInstance();
 
-    const verificationLink = `${Config.FRONTEND_URL}/verify?hash=${hash}&email=${email}&method=${AuthenticationMethod.MAGIC_LINK}`;
+    const verificationLink = `${Config.FRONTEND_URL}/verify?hash=${hash}&email=${email}&method=${method}`;
 
     emailServiceInstance.sendEmailHtml(
       email,
@@ -154,7 +158,9 @@ export class SendEmailService {
                 >
                   Dear ${name ? StringFunction.capitalize(name) : "user" + ","}
                 </p>
-                <p
+                ${
+                  !forgotPassword
+                    ? `<p
                   style="
                     color: #333333;
                     font-weight: 600;
@@ -163,7 +169,7 @@ export class SendEmailService {
                     margin-bottom: 15px;
                   "
                 >
-                  Thank you for signing up ${Config.APP_NAME}.
+                  Thank you for choosing ${Config.APP_NAME}.
                 </p>
                 <p
                   style="
@@ -176,7 +182,9 @@ export class SendEmailService {
                 >
                   Before you can login into your account, you need to click on
                   the link below to confirm your email address.
-                </p>
+                </p>`
+                    : ""
+                }
 
                 <!-- CTA Button -->
                 <table role="presentation" style="width: 100%; margin: 30px 0">
@@ -235,7 +243,13 @@ export class SendEmailService {
                     margin-bottom: 15px;
                   "
                 >
-                  <span style="font-weight:600;">Note:</span> The verification link is valid for 30 minutes from the time it is generated.
+                  <span style="font-weight:600;">Note:</span> The verification link is valid for ${formatDistanceToNow(
+                    new Date(
+                      Date.now() + Config.VERIFICATION_TOKEN_EXPIRE_TIME * 1000
+                    ),
+
+                    { addSuffix: true }
+                  )} from the time it is generated.
                 </p>
 
                 

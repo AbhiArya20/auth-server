@@ -1,5 +1,5 @@
 import { IImages, IUserSchema } from "@/models/user_model.js";
-import { UserRole, UserStatus } from "@/utils/constants";
+import { USER_ROLE, USER_STATUS } from "@/utils/constants";
 import StringFunction from "@/utils/string_functions.js";
 
 class UserDTO {
@@ -10,8 +10,8 @@ class UserDTO {
   isEmailVerified: Date | undefined;
   phone?: string;
   isPhoneVerified: Date | undefined;
-  role: (typeof UserRole)[keyof typeof UserRole];
-  status: (typeof UserStatus)[keyof typeof UserStatus];
+  role: (typeof USER_ROLE)[keyof typeof USER_ROLE];
+  status: (typeof USER_STATUS)[keyof typeof USER_STATUS];
   avatar?: IImages;
   createdAt: Date;
   updatedAt: Date;
@@ -28,9 +28,9 @@ class UserDTO {
     this.isEmailVerified = user.isEmailVerified;
     this.phone = user.phone;
     this.isPhoneVerified = user.isPhoneVerified;
-    this.avatar = user.avatar;
     this.role = user.role;
     this.status = user.status;
+    this.avatar = user.avatar;
     this.createdAt = user.createdAt;
     this.updatedAt = user.updatedAt;
   }

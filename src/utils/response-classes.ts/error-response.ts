@@ -1,15 +1,19 @@
-import Constants, { UserStatus } from "@/utils/constants.js";
+import {
+  ERROR_RESPONSE_CODE,
+  ERROR_RESPONSE_MESSAGE,
+  USER_STATUS,
+} from "@/utils/constants.js";
 import { ZodError } from "zod";
 class ErrorResponse<T> {
   success: boolean;
   code?: string;
   message?: string;
   error?: T;
-  constructor(response: { error?: T; code?: string; message?: string }) {
+  constructor(response: { code: string; message: string; error?: T }) {
     this.success = false;
-    this.error = response.error;
     this.code = response.code;
     this.message = response.message;
+    this.error = response.error;
   }
 }
 
@@ -17,37 +21,39 @@ export default ErrorResponse;
 
 export const createValidationErrorResponse = (error: ZodError) => {
   return new ErrorResponse({
+    code: ERROR_RESPONSE_CODE.VALIDATION_ERROR,
+    message:
+      error?.errors[0]?.message ??
+      ERROR_RESPONSE_MESSAGE.INVALID_REQUEST_BODY_MESSAGE,
     error: error,
-    code: Constants.VALIDATION_ERROR,
-    message: error?.errors[0]?.message,
   });
 };
 
 export const createAccountStatusErrorResponse = (
-  status: (typeof UserStatus)[keyof typeof UserStatus]
+  status: (typeof USER_STATUS)[keyof typeof USER_STATUS]
 ) => {
   return new ErrorResponse({
     code:
-      status == UserStatus.BLOCKED
-        ? Constants.ACCOUNT_BLOCKED
-        : Constants.ACCOUNT_DELETED,
+      status == USER_STATUS.BLOCKED
+        ? ERROR_RESPONSE_CODE.ACCOUNT_BLOCKED
+        : ERROR_RESPONSE_CODE.ACCOUNT_DELETED,
     message:
-      status == UserStatus.BLOCKED
-        ? Constants.ACCOUNT_BLOCKED_MESSAGE
-        : Constants.ACCOUNT_DELETED_MESSAGE,
+      status == USER_STATUS.BLOCKED
+        ? ERROR_RESPONSE_MESSAGE.ACCOUNT_BLOCKED_MESSAGE
+        : ERROR_RESPONSE_MESSAGE.ACCOUNT_DELETED_MESSAGE,
   });
 };
 
 export const createInvalidRefreshTokenErrorResponse = () => {
   return new ErrorResponse({
-    code: Constants.INVALID_TOKEN,
-    message: Constants.INVALID_REFRESH_TOKEN_MESSAGE,
+    code: ERROR_RESPONSE_CODE.INVALID_TOKEN,
+    message: ERROR_RESPONSE_MESSAGE.INVALID_ACCESS_TOKEN_MESSAGE,
   });
 };
 
 export const createServerErrorResponse = () => {
   return new ErrorResponse({
-    code: Constants.SERVER_ERROR,
-    message: Constants.SERVER_ERROR_MESSAGE,
+    code: ERROR_RESPONSE_CODE.SERVER_ERROR,
+    message: ERROR_RESPONSE_MESSAGE.SERVER_ERROR_MESSAGE,
   });
 };

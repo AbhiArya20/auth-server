@@ -3,9 +3,13 @@ import Config from "@/config/config.js";
 import TokenService from "@/services/token_services.js";
 import UserService from "@/services/user_services.js";
 import bcrypt from "bcrypt";
-import Constants, {
-  AuthenticationMethod,
-  UserStatus,
+import {
+  AUTHENTICATION_METHOD,
+  ERROR_RESPONSE_CODE,
+  ERROR_RESPONSE_MESSAGE,
+  SUCCESS_RESPONSE_CODE,
+  SUCCESS_RESPONSE_MESSAGE,
+  USER_STATUS,
 } from "@/utils/constants.js";
 import ErrorResponse, {
   createAccountStatusErrorResponse,
@@ -17,6 +21,9 @@ import { SendEmailService } from "@/services/email_services.js";
 import HashService from "@/services/hash_services.js";
 import OtpServices from "@/services/otp_services";
 import { IUserSchema } from "@/models/user_model";
+import { UAParser } from "ua-parser-js";
+import { logger } from "@/utils/logger/logger";
+import { isEmailMethod, isMethodForMagicLink } from "@/utils/method";
 
 class AuthController {
   public static async register(
@@ -38,8 +45,8 @@ class AuthController {
       if (user) {
         return res.status(400).json(
           new ErrorResponse({
-            code: Constants.USER_ALREADY_REGISTERED,
-            message: Constants.USER_REGISTERED_MESSAGE,
+            code: ERROR_RESPONSE_CODE.USER_ALREADY_REGISTERED,
+            message: ERROR_RESPONSE_MESSAGE.USER_REGISTERED_MESSAGE,
           })
         );
       }
@@ -68,20 +75,16 @@ class AuthController {
           data: {
             email,
             phone,
-            hash:
-              method === AuthenticationMethod.MAGIC_LINK ||
-              method === AuthenticationMethod.PASSWORD
-                ? undefined
-                : hash,
+            hash: isMethodForMagicLink(method) ? undefined : hash,
             method,
             user: formattedUser,
           },
-          code: Constants.REGISTRATION_SUCCESS,
-          message: Constants.REGISTRATION_SUCCESS_MESSAGE,
+          code: SUCCESS_RESPONSE_CODE.REGISTRATION_SUCCESS,
+          message: SUCCESS_RESPONSE_MESSAGE.REGISTRATION_SUCCESS_MESSAGE,
         })
       );
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       next(error);
     }
   }
@@ -98,13 +101,13 @@ class AuthController {
       });
 
       // If email is provided and method is PASSWORD
-      if (email && method === AuthenticationMethod.PASSWORD) {
+      if (method === AUTHENTICATION_METHOD.PASSWORD && email) {
         // If user does not exist
         if (!user) {
           return res.status(400).json(
             new ErrorResponse({
-              code: Constants.INVALID_CREDENTIALS,
-              message: Constants.USER_NOT_REGISTER,
+              code: ERROR_RESPONSE_CODE.INVALID_CREDENTIALS,
+              message: ERROR_RESPONSE_MESSAGE.USER_NOT_REGISTER,
             })
           );
         }
@@ -113,8 +116,8 @@ class AuthController {
         if (!user.password) {
           return res.status(400).json(
             new ErrorResponse({
-              code: Constants.PASSWORD_NOT_SET,
-              message: Constants.PASSWORD_NOT_SET_MESSAGE,
+              code: ERROR_RESPONSE_CODE.PASSWORD_NOT_SET,
+              message: ERROR_RESPONSE_MESSAGE.PASSWORD_NOT_SET_MESSAGE,
             })
           );
         }
@@ -123,36 +126,44 @@ class AuthController {
         if (!(await bcrypt.compare(password, user.password))) {
           return res.status(400).json(
             new ErrorResponse({
-              code: Constants.INVALID_CREDENTIALS,
-              message: Constants.INCORRECT_PASSWORD,
+              code: ERROR_RESPONSE_CODE.INVALID_CREDENTIALS,
+              message: ERROR_RESPONSE_MESSAGE.INCORRECT_PASSWORD,
             })
           );
+        }
+
+        // If user is blocked or deleted
+        const { status, isEmailVerified, isPhoneVerified } = user;
+        if (status === USER_STATUS.BLOCKED || status === USER_STATUS.DELETED) {
+          return res
+            .status(status === USER_STATUS.BLOCKED ? 403 : 404)
+            .json(createAccountStatusErrorResponse(status));
         }
 
         // Create DTO
         const formattedUser = new UserDTO(user);
 
-        // If user is blocked or deleted
-        const { status, isEmailVerified, isPhoneVerified } = formattedUser;
-        if (status === UserStatus.BLOCKED || status === UserStatus.DELETED) {
-          return res
-            .status(status === UserStatus.BLOCKED ? 403 : 404)
-            .json(createAccountStatusErrorResponse(status));
-        }
-
         // If user is not verified
         if (!isEmailVerified && !isPhoneVerified) {
+          await AuthControllerUtility.sendVerificationDetails({
+            user,
+            method,
+            email,
+            phone,
+          });
+
           return res.status(200).json(
             new SuccessResponse({
-              data: { user: formattedUser },
-              code: Constants.UNVERIFIED_USER,
-              message: Constants.UNVERIFIED_USER_MESSAGE,
+              data: { email, phone, method, user: formattedUser },
+              code: ERROR_RESPONSE_CODE.UNVERIFIED_USER,
+              message: ERROR_RESPONSE_MESSAGE.UNVERIFIED_USER_MESSAGE,
             })
           );
         }
 
         // Set cookies and send response
         await AuthControllerUtility.setCookies(
+          req,
           res,
           { ...formattedUser },
           remember
@@ -161,8 +172,8 @@ class AuthController {
         return res.status(200).json(
           new SuccessResponse({
             data: { user: formattedUser },
-            code: Constants.LOGIN_SUCCESS,
-            message: Constants.LOGIN_SUCCESS_MESSAGE,
+            code: SUCCESS_RESPONSE_CODE.LOGIN_SUCCESS,
+            message: SUCCESS_RESPONSE_MESSAGE.LOGIN_SUCCESS_MESSAGE,
           })
         );
       }
@@ -177,9 +188,9 @@ class AuthController {
 
       // If user is blocked or deleted
       const { status } = user;
-      if (status === UserStatus.BLOCKED || status === UserStatus.DELETED) {
+      if (status === USER_STATUS.BLOCKED || status === USER_STATUS.DELETED) {
         return res
-          .status(status === UserStatus.BLOCKED ? 403 : 404)
+          .status(status === USER_STATUS.BLOCKED ? 403 : 404)
           .json(createAccountStatusErrorResponse(status));
       }
 
@@ -198,20 +209,20 @@ class AuthController {
           data: {
             email,
             phone,
-            hash:
-              method === AuthenticationMethod.MAGIC_LINK ||
-              method === AuthenticationMethod.PASSWORD
-                ? undefined
-                : hash,
+            hash: isMethodForMagicLink(method) ? undefined : hash,
             method,
             user: formattedUser,
           },
-          code: Constants.REGISTRATION_SUCCESS,
-          message: Constants.REGISTRATION_SUCCESS_MESSAGE,
+          code: isMethodForMagicLink(method)
+            ? SUCCESS_RESPONSE_CODE.VERIFICATION_LINK_SEND
+            : SUCCESS_RESPONSE_CODE.OTP_SENT,
+          message: isMethodForMagicLink(method)
+            ? SUCCESS_RESPONSE_MESSAGE.REGISTRATION_SUCCESS_MESSAGE
+            : SUCCESS_RESPONSE_MESSAGE.OTP_SENT_MESSAGE,
         })
       );
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       next(error);
     }
   }
@@ -231,8 +242,8 @@ class AuthController {
       if (!user) {
         return res.status(404).json(
           new ErrorResponse({
-            code: Constants.NOT_FOUND,
-            message: Constants.USER_NOT_FOUND_MESSAGE,
+            code: ERROR_RESPONSE_CODE.NOT_FOUND,
+            message: ERROR_RESPONSE_MESSAGE.USER_NOT_FOUND_MESSAGE,
           })
         );
       }
@@ -242,9 +253,9 @@ class AuthController {
 
       // If user is blocked or deleted
       const { status } = formattedUser;
-      if (status === UserStatus.BLOCKED || status === UserStatus.DELETED) {
+      if (status === USER_STATUS.BLOCKED || status === USER_STATUS.DELETED) {
         return res
-          .status(status === UserStatus.BLOCKED ? 403 : 404)
+          .status(status === USER_STATUS.BLOCKED ? 403 : 404)
           .json(createAccountStatusErrorResponse(status));
       }
 
@@ -262,20 +273,20 @@ class AuthController {
           data: {
             email,
             phone,
-            hash:
-              method === AuthenticationMethod.MAGIC_LINK ||
-              method === AuthenticationMethod.PASSWORD
-                ? undefined
-                : hash,
+            hash: isMethodForMagicLink(method) ? undefined : hash,
             method,
             user: formattedUser,
           },
-          code: Constants.VERIFICATION_LINK_SEND,
-          message: Constants.VERIFICATION_LINK_SEND_MESSAGE,
+          code: isMethodForMagicLink(method)
+            ? SUCCESS_RESPONSE_CODE.VERIFICATION_LINK_SEND
+            : SUCCESS_RESPONSE_CODE.OTP_SENT,
+          message: isMethodForMagicLink(method)
+            ? SUCCESS_RESPONSE_MESSAGE.REGISTRATION_SUCCESS_MESSAGE
+            : SUCCESS_RESPONSE_MESSAGE.OTP_SENT_MESSAGE,
         })
       );
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       next(error);
     }
   }
@@ -295,87 +306,88 @@ class AuthController {
       if (!user) {
         return res.status(404).json(
           new ErrorResponse({
-            code: Constants.USER_NOT_REGISTER,
-            message: Constants.USER_REGISTERED_MESSAGE,
+            code: ERROR_RESPONSE_CODE.USER_NOT_REGISTER,
+            message: ERROR_RESPONSE_MESSAGE.USER_REGISTERED_MESSAGE,
           })
         );
       }
 
-      // Get hash and expire time from hash
-      const [frontendHash, expireAt] = hash.split("-");
-
-      const verificationToken = email
+      const verificationToken = isEmailMethod(method)
         ? user.emailVerificationToken
         : user.phoneVerificationToken;
 
-      const verificationTokenDate = email
+      const verificationTokenExpiresAt = isEmailMethod(method)
         ? user.emailVerificationTokenExpiresAt
         : user.phoneVerificationTokenExpiresAt;
 
       // If verification token or verification token date is not found
       // TODO: Fix error message here
-      if (!verificationToken || !verificationTokenDate) {
+      if (!verificationToken || !verificationTokenExpiresAt) {
         return res.status(400).json(
           new ErrorResponse({
-            code: Constants.INVALID_LINK,
-            message: Constants.INVALID_VERIFICATION_LINK_MESSAGE,
+            code: isMethodForMagicLink(method)
+              ? ERROR_RESPONSE_CODE.INVALID_LINK
+              : ERROR_RESPONSE_CODE.INVALID_OTP,
+            message: isMethodForMagicLink(method)
+              ? ERROR_RESPONSE_MESSAGE.INVALID_VERIFICATION_LINK_MESSAGE
+              : ERROR_RESPONSE_MESSAGE.INVALID_OTP_MESSAGE,
           })
         );
       }
-
-      const verificationTokenExpiresAt = new Date(verificationTokenDate);
 
       // If verification token expired
-      if (verificationTokenExpiresAt.getMilliseconds() < Date.now()) {
+      if (verificationTokenExpiresAt.getTime() < Date.now()) {
         return res.status(400).json(
           new ErrorResponse({
-            code: Constants.REQUEST_TIMEOUT,
-            message: Constants.EXPIRE_VERIFICATION_LINK_MESSAGE,
+            code: ERROR_RESPONSE_CODE.REQUEST_TIMEOUT,
+            message: ERROR_RESPONSE_MESSAGE.EXPIRE_VERIFICATION_LINK_MESSAGE,
           })
         );
       }
 
-      const { token, hash: backendGeneratedHash } =
+      // Re-generate the token and hash from the data given by the user
+      const { token: generateToken, hash: generatedHash } =
         await AuthControllerUtility.generateTokenAndHash({
           email,
           phone,
           otp,
           method,
+          expireAt: verificationTokenExpiresAt.getTime(),
           userId: user._id.toString(),
-          expireAt,
         });
 
+      // Generate the hash of the token and the secret
       const backendHash = HashService.hash(
         verificationToken,
         Config.SECONDARY_HASH_SECRET
       );
 
       if (
-        frontendHash !== backendGeneratedHash ||
-        token !== verificationToken ||
-        frontendHash != backendHash
+        hash !== generatedHash ||
+        generateToken !== verificationToken ||
+        hash != backendHash
       ) {
         return res.status(400).json(
           // TODO: Fix error message here
           new ErrorResponse({
-            code: Constants.INVALID_OTP,
-            message: Constants.OTP_INVALID_MESSAGE,
+            code: ERROR_RESPONSE_CODE.INVALID_OTP,
+            message: ERROR_RESPONSE_MESSAGE.OTP_INVALID_MESSAGE,
           })
         );
       }
 
       if (
-        method === AuthenticationMethod.SMS_OTP ||
-        method === AuthenticationMethod.WHATSAPP_OTP ||
-        method === AuthenticationMethod.EMAIL_OTP
+        method === AUTHENTICATION_METHOD.SMS_OTP ||
+        method === AUTHENTICATION_METHOD.WHATSAPP_OTP ||
+        method === AUTHENTICATION_METHOD.EMAIL_OTP
       ) {
         const key = user._id.toString() + ":" + method + ":" + otp;
         const isUsed = await OtpServices.isUsed(key);
         if (isUsed) {
           return res.status(406).json(
             new ErrorResponse({
-              code: Constants.OTP_USED,
-              message: Constants.OTP_USED_MESSAGE,
+              code: ERROR_RESPONSE_CODE.OTP_USED,
+              message: ERROR_RESPONSE_MESSAGE.OTP_USED_MESSAGE,
             })
           );
         }
@@ -385,9 +397,9 @@ class AuthController {
 
       // If user is blocked or deleted
       const { status } = formattedUser;
-      if (status === UserStatus.BLOCKED || status === UserStatus.DELETED) {
+      if (status === USER_STATUS.BLOCKED || status === USER_STATUS.DELETED) {
         return res
-          .status(status === UserStatus.BLOCKED ? 403 : 404)
+          .status(status === USER_STATUS.BLOCKED ? 403 : 404)
           .json(createAccountStatusErrorResponse(status));
       }
 
@@ -407,17 +419,17 @@ class AuthController {
       }
 
       // Set cookies and send response
-      await AuthControllerUtility.setCookies(res, { ...formattedUser });
+      await AuthControllerUtility.setCookies(req, res, { ...formattedUser });
 
       return res.status(200).json(
         new SuccessResponse({
           data: { user: formattedUser },
-          code: Constants.VERIFICATION_SUCCESSFUL,
-          message: Constants.VERIFICATION_SUCCESSFUL_MESSAGE,
+          code: SUCCESS_RESPONSE_CODE.VERIFICATION_SUCCESSFUL,
+          message: SUCCESS_RESPONSE_MESSAGE.VERIFICATION_SUCCESSFUL_MESSAGE,
         })
       );
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       next(error);
     }
   }
@@ -445,7 +457,7 @@ class AuthController {
           }
         }
       } catch (error) {
-        console.error(error);
+        logger.error(error);
         return res.status(401).json(createInvalidRefreshTokenErrorResponse());
       }
 
@@ -460,15 +472,15 @@ class AuthController {
         if (!user) {
           return res.status(401).json(
             new ErrorResponse({
-              code: Constants.NOT_FOUND,
-              message: Constants.USER_NOT_FOUND_MESSAGE,
+              code: ERROR_RESPONSE_CODE.NOT_FOUND,
+              message: ERROR_RESPONSE_MESSAGE.USER_NOT_FOUND_MESSAGE,
             })
           );
         }
 
         // Check user's status
         const { status } = user;
-        if (status === UserStatus.BLOCKED || status === UserStatus.DELETED) {
+        if (status === USER_STATUS.BLOCKED || status === USER_STATUS.DELETED) {
           return res.status(401).json(createAccountStatusErrorResponse(status));
         }
 
@@ -476,19 +488,19 @@ class AuthController {
         const formattedUser = new UserDTO(user);
 
         // Set cookies and Send response
-        await AuthControllerUtility.setCookies(res, { ...formattedUser });
+        await AuthControllerUtility.setCookies(req, res, { ...formattedUser });
         return res.status(200).json(
           new SuccessResponse({
             data: { user: formattedUser },
-            code: Constants.LOGIN_SUCCESS,
-            message: Constants.LOGIN_SUCCESS_MESSAGE,
+            code: SUCCESS_RESPONSE_CODE.LOGIN_SUCCESS,
+            message: SUCCESS_RESPONSE_MESSAGE.LOGIN_SUCCESS_MESSAGE,
           })
         );
       } else {
         return res.status(401).json(createInvalidRefreshTokenErrorResponse());
       }
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       next(error);
     }
   }
@@ -509,17 +521,17 @@ class AuthController {
       if (!user) {
         return res.status(404).json(
           new ErrorResponse({
-            code: Constants.NOT_FOUND,
-            message: Constants.USER_NOT_FOUND_MESSAGE,
+            code: ERROR_RESPONSE_CODE.NOT_FOUND,
+            message: ERROR_RESPONSE_MESSAGE.USER_NOT_FOUND_MESSAGE,
           })
         );
       }
 
       // Check user's status
       const { status } = user;
-      if (status === UserStatus.BLOCKED || status === UserStatus.DELETED) {
+      if (status === USER_STATUS.BLOCKED || status === USER_STATUS.DELETED) {
         return res
-          .status(status === UserStatus.BLOCKED ? 403 : 404)
+          .status(status === USER_STATUS.BLOCKED ? 403 : 404)
           .json(createAccountStatusErrorResponse(status));
       }
 
@@ -540,20 +552,20 @@ class AuthController {
             email,
             phone,
             hash:
-              method === AuthenticationMethod.MAGIC_LINK ||
-              method === AuthenticationMethod.PASSWORD
+              method === AUTHENTICATION_METHOD.MAGIC_LINK ||
+              method === AUTHENTICATION_METHOD.PASSWORD
                 ? undefined
                 : hash,
             method,
             user: formattedUser,
           },
           // TODO: Fix error message here
-          code: Constants.REGISTRATION_SUCCESS,
-          message: Constants.REGISTRATION_SUCCESS_MESSAGE,
+          code: SUCCESS_RESPONSE_CODE.REGISTRATION_SUCCESS,
+          message: SUCCESS_RESPONSE_MESSAGE.REGISTRATION_SUCCESS_MESSAGE,
         })
       );
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       next(error);
     }
   }
@@ -565,7 +577,7 @@ class AuthController {
   ) {
     try {
       // Destructure request body
-      const { phone, email, method, hash, otp } = req.body;
+      const { phone, email, method, hash, otp, newPassword } = req.body;
 
       // Get user from database
       const user = await UserService.findOne({
@@ -577,49 +589,44 @@ class AuthController {
       if (!user) {
         return res.status(404).json(
           new ErrorResponse({
-            code: Constants.USER_NOT_REGISTER,
-            message: Constants.USER_REGISTERED_MESSAGE,
+            code: ERROR_RESPONSE_CODE.USER_NOT_REGISTER,
+            message: ERROR_RESPONSE_MESSAGE.USER_REGISTERED_MESSAGE,
           })
         );
       }
 
-      // Get hash and expire time from hash
-      const [frontendHash, expireAt] = hash.split("-");
-
       const verificationToken = user.passwordResetToken;
-      const verificationTokenDate = user.passwordResetExpiresAt;
+      const verificationTokenExpiresAt = user.passwordResetExpiresAt;
 
       // If verification token or verification token date is not found
       // TODO: Fix error message here
-      if (!verificationToken || !verificationTokenDate) {
+      if (!verificationToken || !verificationTokenExpiresAt) {
         return res.status(400).json(
           new ErrorResponse({
-            code: Constants.INVALID_LINK,
-            message: Constants.INVALID_VERIFICATION_LINK_MESSAGE,
+            code: ERROR_RESPONSE_CODE.INVALID_LINK,
+            message: ERROR_RESPONSE_MESSAGE.INVALID_VERIFICATION_LINK_MESSAGE,
           })
         );
       }
-
-      const verificationTokenExpiresAt = new Date(verificationTokenDate);
 
       // If verification token expired
-      if (verificationTokenExpiresAt.getMilliseconds() < Date.now()) {
+      if (verificationTokenExpiresAt.getTime() < Date.now()) {
         return res.status(400).json(
           new ErrorResponse({
-            code: Constants.REQUEST_TIMEOUT,
-            message: Constants.EXPIRE_VERIFICATION_LINK_MESSAGE,
+            code: ERROR_RESPONSE_CODE.REQUEST_TIMEOUT,
+            message: ERROR_RESPONSE_MESSAGE.EXPIRE_VERIFICATION_LINK_MESSAGE,
           })
         );
       }
 
-      const { token, hash: backendGeneratedHash } =
+      const { token: generateToken, hash: generatedHash } =
         await AuthControllerUtility.generateTokenAndHash({
           email,
           phone,
           otp,
           method,
           userId: user._id.toString(),
-          expireAt,
+          expireAt: verificationTokenExpiresAt.getTime(),
         });
 
       const backendHash = HashService.hash(
@@ -628,31 +635,31 @@ class AuthController {
       );
 
       if (
-        frontendHash !== backendGeneratedHash ||
-        token !== verificationToken ||
-        frontendHash != backendHash
+        hash !== generatedHash ||
+        generateToken !== verificationToken ||
+        hash != backendHash
       ) {
         return res.status(400).json(
           // TODO: Fix error message here
           new ErrorResponse({
-            code: Constants.INVALID_OTP,
-            message: Constants.OTP_INVALID_MESSAGE,
+            code: ERROR_RESPONSE_CODE.INVALID_OTP,
+            message: ERROR_RESPONSE_MESSAGE.OTP_INVALID_MESSAGE,
           })
         );
       }
 
       if (
-        method === AuthenticationMethod.SMS_OTP ||
-        method === AuthenticationMethod.WHATSAPP_OTP ||
-        method === AuthenticationMethod.EMAIL_OTP
+        method === AUTHENTICATION_METHOD.SMS_OTP ||
+        method === AUTHENTICATION_METHOD.WHATSAPP_OTP ||
+        method === AUTHENTICATION_METHOD.EMAIL_OTP
       ) {
         const key = user._id.toString() + ":" + method + ":" + otp;
         const isUsed = await OtpServices.isUsed(key);
         if (isUsed) {
           return res.status(406).json(
             new ErrorResponse({
-              code: Constants.OTP_USED,
-              message: Constants.OTP_USED_MESSAGE,
+              code: ERROR_RESPONSE_CODE.OTP_USED,
+              message: ERROR_RESPONSE_MESSAGE.OTP_USED_MESSAGE,
             })
           );
         }
@@ -662,39 +669,32 @@ class AuthController {
 
       // If user is blocked or deleted
       const { status } = formattedUser;
-      if (status === UserStatus.BLOCKED || status === UserStatus.DELETED) {
+      if (status === USER_STATUS.BLOCKED || status === USER_STATUS.DELETED) {
         return res
-          .status(status === UserStatus.BLOCKED ? 403 : 404)
+          .status(status === USER_STATUS.BLOCKED ? 403 : 404)
           .json(createAccountStatusErrorResponse(status));
       }
 
       // update verification token and verification token date
-      if (email) {
-        await UserService.updateById(user._id, {
-          emailVerificationToken: null,
-          emailVerificationTokenExpiresAt: null,
-          isEmailVerified: Date.now(),
-        });
-      } else {
-        await UserService.updateById(user._id, {
-          phoneVerificationToken: null,
-          phoneVerificationTokenExpiresAt: null,
-          isPhoneVerified: Date.now(),
-        });
-      }
+
+      await UserService.updateById(user._id, {
+        password: newPassword,
+        passwordResetToken: null,
+        passwordResetExpiresAt: null,
+      });
 
       // Set cookies and send response
-      await AuthControllerUtility.setCookies(res, { ...formattedUser });
+      await AuthControllerUtility.setCookies(req, res, { ...formattedUser });
 
       return res.status(200).json(
         new SuccessResponse({
           data: { user: formattedUser },
-          code: Constants.VERIFICATION_SUCCESSFUL,
-          message: Constants.VERIFICATION_SUCCESSFUL_MESSAGE,
+          code: SUCCESS_RESPONSE_CODE.VERIFICATION_SUCCESSFUL,
+          message: SUCCESS_RESPONSE_MESSAGE.VERIFICATION_SUCCESSFUL_MESSAGE,
         })
       );
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       next(error);
     }
   }
@@ -709,7 +709,7 @@ class AuthController {
         .status(200)
         .json(new SuccessResponse({ data: null, code: "", message: "" }));
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       next(error);
     }
   }
@@ -724,8 +724,8 @@ class AuthController {
       if (!user) {
         return res.status(404).json(
           new ErrorResponse({
-            code: Constants.NOT_FOUND,
-            message: Constants.USER_NOT_FOUND_MESSAGE,
+            code: ERROR_RESPONSE_CODE.NOT_FOUND,
+            message: ERROR_RESPONSE_MESSAGE.USER_NOT_FOUND_MESSAGE,
           })
         );
       }
@@ -734,11 +734,13 @@ class AuthController {
 
       return res.status(200).json(
         new SuccessResponse({
+          code: SUCCESS_RESPONSE_CODE.GET_CURRENT_USER_SUCCESS,
+          message: SUCCESS_RESPONSE_MESSAGE.GET_CURRENT_USER_SUCCESS_MESSAGE,
           data: { formattedUser },
         })
       );
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       next(error);
     }
   }
@@ -759,8 +761,8 @@ class AuthController {
       if (!user) {
         return res.status(404).json(
           new ErrorResponse({
-            code: Constants.NOT_FOUND,
-            message: Constants.USER_NOT_FOUND_MESSAGE,
+            code: ERROR_RESPONSE_CODE.NOT_FOUND,
+            message: ERROR_RESPONSE_CODE.USER_NOT_FOUND_MESSAGE,
           })
         );
       }
@@ -769,11 +771,13 @@ class AuthController {
 
       return res.status(200).json(
         new SuccessResponse({
+          code: SUCCESS_RESPONSE_CODE.UPDATE_CURRENT_USER_SUCCESS,
+          message: SUCCESS_RESPONSE_MESSAGE.UPDATE_CURRENT_USER_SUCCESS_MESSAGE,
           data: { formattedUser },
         })
       );
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       next(error);
     }
   }
@@ -783,7 +787,7 @@ type GenerateTokenAndHashProps = {
   email: string;
   phone: string;
   otp: number;
-  method: AuthenticationMethod;
+  method: AUTHENTICATION_METHOD;
   userId: string;
   expireAt: number;
 };
@@ -808,7 +812,8 @@ class AuthControllerUtility {
 
     // Calculate expire time
     const expireTimeInSeconds =
-      method === AuthenticationMethod.MAGIC_LINK
+      method === AUTHENTICATION_METHOD.MAGIC_LINK ||
+      method === AUTHENTICATION_METHOD.PASSWORD
         ? Config.VERIFICATION_TOKEN_EXPIRE_TIME
         : Config.OTP_EXPIRE_TIME;
     const expireAt = Date.now() + expireTimeInSeconds * 1000;
@@ -846,23 +851,25 @@ class AuthControllerUtility {
     // Send OTP via the chosen method
     if (
       email &&
-      (method === AuthenticationMethod.MAGIC_LINK ||
-        method === AuthenticationMethod.PASSWORD)
+      (method === AUTHENTICATION_METHOD.MAGIC_LINK ||
+        method === AUTHENTICATION_METHOD.PASSWORD)
     ) {
       await SendEmailService.sendVerifyEmail(
         email,
         user.firstName ?? "",
-        hash + "-" + expireAt
+        hash,
+        method,
+        forgotPassword
       );
-    } else if (email && method === AuthenticationMethod.EMAIL_OTP) {
+    } else if (email && method === AUTHENTICATION_METHOD.EMAIL_OTP) {
       await SendEmailService.sendOTPEmail(email, user.firstName ?? "", otp);
-    } else if (phone && method === AuthenticationMethod.SMS_OTP) {
+    } else if (phone && method === AUTHENTICATION_METHOD.SMS_OTP) {
       await OtpServices.sendOtpViaPhone(phone, otp);
-    } else if (phone && method === AuthenticationMethod.WHATSAPP_OTP) {
+    } else if (phone && method === AUTHENTICATION_METHOD.WHATSAPP_OTP) {
       await OtpServices.sendOtpViaWhatsapp(phone, otp);
     }
 
-    return { hash: hash + "-" + expireAt };
+    return { hash: hash };
   }
 
   public static async generateTokenAndHash({
@@ -878,8 +885,8 @@ class AuthControllerUtility {
 
     // Add OTP if method is other than MAGIC_LINK
     if (
-      method !== AuthenticationMethod.MAGIC_LINK ||
-      method !== AuthenticationMethod.PASSWORD
+      method !== AUTHENTICATION_METHOD.MAGIC_LINK &&
+      method !== AUTHENTICATION_METHOD.PASSWORD
     ) {
       elements.push(otp);
     }
@@ -895,6 +902,7 @@ class AuthControllerUtility {
   }
 
   public static async setCookies(
+    req: Request,
     res: Response,
     user: UserDTO,
     remember: boolean = true
@@ -903,9 +911,19 @@ class AuthControllerUtility {
     const { accessToken, refreshToken } = await TokenService.generateTokens(
       user
     );
+
+    const userAgent = UAParser(req.headers["user-agent"]);
+    console.log(userAgent);
+
     await TokenService.storeRefreshToken({
       token: refreshToken,
       userId: user._id,
+      ip: req.ip,
+      browser: userAgent.browser.toString(),
+      engine: userAgent.engine.toString(),
+      os: userAgent.os.toString(),
+      device: userAgent.device.toString(),
+      cpu: userAgent.cpu.toString(),
     });
 
     // Set cookies in response

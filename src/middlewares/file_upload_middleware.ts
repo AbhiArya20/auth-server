@@ -2,7 +2,7 @@ import multer, { MulterError } from "multer";
 import multerS3 from "multer-s3";
 import { v6 as uuid } from "uuid";
 import { fileTypeFromFile } from "file-type";
-import { s3Client } from "@/config/aws_config";
+import s3Client from "@/config/aws_config";
 import Config from "@/config/config";
 
 const allowedImage = ["image/png", "image/jpeg"];

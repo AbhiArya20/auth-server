@@ -4,10 +4,10 @@ export class SuccessResponse<T> {
   code?: string;
   data?: T;
 
-  constructor(response: { data?: T; message?: string; code?: string }) {
+  constructor(response: { code: string; message: string; data: T }) {
     this.success = true;
-    this.data = response.data;
     this.code = response.code;
     this.message = response.message;
+    this.data = response.data;
   }
 }

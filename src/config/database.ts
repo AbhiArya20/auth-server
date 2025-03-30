@@ -1,9 +1,10 @@
 import mongoose from "mongoose";
 import Config from "@/config/config.js";
+import { logger } from "@/utils/logger/logger";
 
 async function dbConnect() {
   await mongoose.connect(Config.DB_URL);
-  console.log("Database Connected on", Config.DB_URL);
+  logger.info("Database Connected on " + Config.DB_URL);
 }
 
-export { dbConnect };
+export default dbConnect;

@@ -1,11 +1,16 @@
 import { Request, Response, NextFunction } from "express";
 import TokenService from "@/services/token_services.js";
 import Config from "@/config/config.js";
-import Constants, { UserStatus } from "@/utils/constants.js";
+import {
+  ERROR_RESPONSE_CODE,
+  ERROR_RESPONSE_MESSAGE,
+  USER_STATUS,
+} from "@/utils/constants.js";
 import ErrorResponse, {
   createAccountStatusErrorResponse,
 } from "@/utils/response-classes.ts/error-response.js";
 import mongoose from "mongoose";
+import { logger } from "@/utils/logger/logger";
 
 class AuthMiddleware {
   public static async middleware(
@@ -19,7 +24,7 @@ class AuthMiddleware {
         req.headers.authorization?.split(" ")[1];
 
       if (!accessToken) {
-        throw new Error("No token");
+        throw new Error(ERROR_RESPONSE_MESSAGE.INVALID_ACCESS_TOKEN_MESSAGE);
       }
 
       // Verify the token using tokenService
@@ -30,13 +35,13 @@ class AuthMiddleware {
         !user._id ||
         mongoose.Types.ObjectId.isValid(user._id) === false
       ) {
-        throw new Error("Invalid token");
+        throw new Error(ERROR_RESPONSE_MESSAGE.INVALID_ACCESS_TOKEN_MESSAGE);
       }
 
       // Check if user is blocked or deleted
       if (
-        user.status === UserStatus.ACTIVE ||
-        user.status === UserStatus.DELETED
+        user.status === USER_STATUS.ACTIVE ||
+        user.status === USER_STATUS.DELETED
       ) {
         return res
           .status(401)
@@ -47,8 +52,8 @@ class AuthMiddleware {
       if (!user.isEmailVerified) {
         return res.status(401).json(
           new ErrorResponse({
-            code: Constants.UNVERIFIED_USER,
-            message: Constants.UNVERIFIED_USER_MESSAGE,
+            code: ERROR_RESPONSE_CODE.UNVERIFIED_USER,
+            message: ERROR_RESPONSE_MESSAGE.UNVERIFIED_USER_MESSAGE,
           })
         );
       }
@@ -57,11 +62,11 @@ class AuthMiddleware {
 
       next();
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       return res.status(401).json(
         new ErrorResponse({
-          code: Constants.INVALID_TOKEN,
-          message: Constants.INVALID_ACCESS_TOKEN_MESSAGE,
+          code: ERROR_RESPONSE_CODE.INVALID_TOKEN,
+          message: ERROR_RESPONSE_MESSAGE.INVALID_ACCESS_TOKEN_MESSAGE,
         })
       );
     }

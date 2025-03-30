@@ -1,13 +1,13 @@
 import mongoose, { ObjectId, UpdateQuery } from "mongoose";
 import bcrypt from "bcrypt";
-import { UserRole, UserStatus } from "@/utils/constants";
+import { USER_ROLE, USER_STATUS } from "@/utils/constants";
 
 export interface IImages {
   image: string;
   etag: string;
 }
 
-// Email and Phone is optional here but we should mark either email or phone as required.
+// Email and Phone is optional here but we are mark either email or phone as required.
 // We make sure email or phone is available in the validation schema.
 export interface IUserSchema {
   _id: ObjectId;
@@ -18,8 +18,8 @@ export interface IUserSchema {
   phone?: string;
   isPhoneVerified?: Date;
   password?: string;
-  role: (typeof UserRole)[keyof typeof UserRole];
-  status: (typeof UserStatus)[keyof typeof UserStatus];
+  role: (typeof USER_ROLE)[keyof typeof USER_ROLE];
+  status: (typeof USER_STATUS)[keyof typeof USER_STATUS];
   avatar?: IImages;
   emailVerificationToken?: string;
   emailVerificationTokenExpiresAt?: Date;
@@ -75,13 +75,13 @@ const userSchema = new mongoose.Schema<IUserSchema>(
     },
     role: {
       type: String,
-      enum: [UserRole.ADMIN, UserRole.USER],
-      default: UserRole.USER,
+      enum: [USER_ROLE.ADMIN, USER_ROLE.USER],
+      default: USER_ROLE.USER,
     },
     status: {
       type: String,
-      default: UserStatus.ACTIVE,
-      enum: [UserStatus.ACTIVE, UserStatus.BLOCKED, UserStatus.DELETED],
+      default: USER_STATUS.ACTIVE,
+      enum: [USER_STATUS.ACTIVE, USER_STATUS.BLOCKED, USER_STATUS.DELETED],
     },
     avatar: {
       type: {

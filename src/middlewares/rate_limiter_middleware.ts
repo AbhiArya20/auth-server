@@ -4,6 +4,7 @@ import RedisKeys from "@/utils/redis/redis_keys.js";
 import ErrorResponse, {
   createServerErrorResponse,
 } from "@/utils/response-classes.ts/error-response.js";
+import { logger } from "@/utils/logger/logger";
 
 const rateLimiterMiddleware = (
   maxRequests: number,
@@ -74,8 +75,8 @@ const rateLimiterMiddleware = (
       next();
     } catch (error) {
       // Handle any errors that occur during rate limiting
-      console.error(error);
-      return res.status(500).json(createServerErrorResponse);
+      logger.error(error);
+      return res.status(500).json(createServerErrorResponse());
     }
   };
   return middleware;

@@ -1,3 +1,4 @@
+import { logger } from "@/utils/logger/logger";
 import { config } from "dotenv";
 import { z } from "zod";
 config();
@@ -9,10 +10,6 @@ class Config {
     APP_NAME: z.string(),
     APP_LOGO_URL: z.string(),
     APP_SUPPORT_EMAIL: z.string().email(),
-    APP_FACEBOOK_URL: z.string().url(),
-    APP_LINKEDIN_URL: z.string().url(),
-    APP_INSTAGRAM_URL: z.string().url(),
-    APP_TWITTER_URL: z.string().url(),
     PORT: z.coerce.number().min(1),
     DB_URL: z.string(),
     CORS_ORIGIN: z
@@ -66,7 +63,7 @@ class Config {
   private static validateEnv() {
     const parsed = this.schema.safeParse(process.env);
     if (!parsed.success) {
-      console.error("Invalid environment variables:", parsed.error.errors);
+      logger.error("Invalid environment variables:", parsed.error.errors);
       throw new Error("Invalid environment variables");
     }
     return parsed.data;
@@ -78,20 +75,10 @@ class Config {
   // Node environment
   static readonly NODE_ENV = Config.config.NODE_ENV;
 
-  // App Name
+  // App configuration
   static readonly APP_NAME = Config.config.APP_NAME;
-
-  // App Logo URL
   static readonly APP_LOGO_URL = Config.config.APP_LOGO_URL;
-
-  // App Support Email
   static readonly APP_SUPPORT_EMAIL = Config.config.APP_SUPPORT_EMAIL;
-
-  // App social media URLs
-  static readonly APP_FACEBOOK_URL = Config.config.APP_FACEBOOK_URL;
-  static readonly APP_LINKEDIN_URL = Config.config.APP_LINKEDIN_URL;
-  static readonly APP_INSTAGRAM_URL = Config.config.APP_INSTAGRAM_URL;
-  static readonly APP_TWITTER_URL = Config.config.APP_TWITTER_URL;
 
   // Port
   static readonly PORT = Config.config.PORT;
@@ -165,9 +152,8 @@ class Config {
   static readonly VERIFICATION_TOKEN_EXPIRE_TIME =
     Config.config.VERIFICATION_TOKEN_EXPIRE_TIME;
 
-  // Backend Configuration
+  // Backend and Frontend URLs
   static readonly BACKEND_URL = Config.config.BACKEND_URL;
-
   static readonly FRONTEND_URL = Config.config.FRONTEND_URL;
 }
 

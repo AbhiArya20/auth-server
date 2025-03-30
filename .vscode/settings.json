@@ -5,7 +5,15 @@
     "**/.hg": true,
     "**/.DS_Store": true,
     "**/Thumbs.db": true,
-    "src/config/database.ts": true
+    "tsconfig.json": true,
+    "package.json": true,
+    "package-lock.json": true,
+    "eslint.config.js": true
   },
-  "hide-files.files": ["src/config/database.ts"]
+  "hide-files.files": [
+    "tsconfig.json",
+    "package.json",
+    "package-lock.json",
+    "eslint.config.js"
+  ]
 }

@@ -1,9 +1,9 @@
 import jwt from "jsonwebtoken";
 import { ObjectId, UpdateQuery, FilterQuery } from "mongoose";
 import Config from "@/config/config.js";
-import RefreshUserModel, {
-  IRefreshUserSchema,
-} from "@/models/refresh_user_model.js";
+import RefreshTokenModel, {
+  IRefreshTokenSchema,
+} from "@/models/refresh_token_model.js";
 import UserDTO from "@/dtos/user_dto.js";
 
 class TokenService {
@@ -29,13 +29,17 @@ class TokenService {
   }
 
   // Store Refresh Token
-  public static async storeRefreshToken(data: UpdateQuery<IRefreshUserSchema>) {
-    await RefreshUserModel.create(data);
+  public static async storeRefreshToken(
+    data: UpdateQuery<IRefreshTokenSchema>
+  ) {
+    await RefreshTokenModel.create(data);
   }
 
   // find RefreshToken
-  public static async findRefreshToken(query: FilterQuery<IRefreshUserSchema>) {
-    return await RefreshUserModel.findOne(query);
+  public static async findRefreshToken(
+    query: FilterQuery<IRefreshTokenSchema>
+  ) {
+    return await RefreshTokenModel.findOne(query);
   }
 
   // Remove RefreshToken
@@ -43,7 +47,7 @@ class TokenService {
     refreshToken: string,
     userId: string | ObjectId
   ) {
-    return await RefreshUserModel.findOneAndDelete({
+    return await RefreshTokenModel.findOneAndDelete({
       userId,
       token: refreshToken,
     });

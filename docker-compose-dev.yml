@@ -29,11 +29,15 @@ services:
       - "5000:5000"
     volumes:
       - .:/app
+      - /app/node_modules
     depends_on:
       - mongodb
       - redis
+    environment:
+      - NODE_ENV=development
     networks:
       - auth
+    command: ["npm", "run", "dev"]
 
 volumes:
   mongodb_data:

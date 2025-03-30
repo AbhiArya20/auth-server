@@ -3,18 +3,21 @@ import bodyParser from "body-parser";
 import cookieParser from "cookie-parser";
 import { queryParser } from "express-query-parser";
 import cors, { CorsOptions } from "cors";
-import { dbConnect } from "@/config/database.js";
+import dbConnect from "@/config/database.js";
 import morgan from "morgan";
 import { rateLimiterMiddleware } from "@/middlewares/rate_limiter_middleware.js";
 import AuthRouter from "@/routes/auth_route.js";
 import ErrorResponse, {
   createServerErrorResponse,
 } from "@/utils/response-classes.ts/error-response.js";
-import Constants from "@/utils/constants.js";
+import {
+  ERROR_RESPONSE_CODE,
+  ERROR_RESPONSE_MESSAGE,
+} from "@/utils/constants.js";
 import Config from "@/config/config.js";
 import helmet from "helmet";
 import multer from "multer";
-import useragent from "express-useragent";
+import { logger } from "@/utils/logger/logger";
 
 class Server {
   static async createServer() {
@@ -40,9 +43,6 @@ class Server {
 
     // Configure morgan middleware for logging incoming requests to the console
     app.use(morgan("dev"));
-
-    // User agent middleware
-    app.use(useragent.express());
 
     // Configure body parser middleware
     app.use(bodyParser.json({ limit: "2mb" }));
@@ -74,7 +74,7 @@ class Server {
       res.status(200).json({
         message: "welcome to the auth server.",
         status: "Running",
-        yourIP: req.ip,
+        yourIP: JSON.stringify(req.ip),
       });
     });
 
@@ -84,8 +84,20 @@ class Server {
         if (!error) {
           return res.status(404).json(
             new ErrorResponse({
-              code: Constants.NOT_FOUND,
-              message: Constants.ROUTE_NOT_FOUND_MESSAGE,
+              code: ERROR_RESPONSE_CODE.NOT_FOUND,
+              message: ERROR_RESPONSE_MESSAGE.ROUTE_NOT_FOUND_MESSAGE,
+            })
+          );
+        }
+
+        logger.error(error);
+
+        if (error instanceof SyntaxError) {
+          return res.status(400).json(
+            new ErrorResponse({
+              code: ERROR_RESPONSE_CODE.INVALID_REQUEST_BODY,
+              message: ERROR_RESPONSE_MESSAGE.INVALID_REQUEST_BODY_MESSAGE,
+              error: error,
             })
           );
         }

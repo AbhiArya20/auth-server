@@ -47,20 +47,12 @@ class OtpService {
     await axios.post(Config.OTP_WHATSAPP_URL, configuration);
   }
 
-  // Verify OTP hash
-  public static async verifyOtp(
-    hashFromFrontend: string,
-    computedHash: string
-  ) {
-    return hashFromFrontend === computedHash;
-  }
-
   public static async isUsed(key: string) {
     const isUsed = await RedisClient.get(key);
     if (isUsed) {
       return true;
     }
-    await RedisClient.setex(key, 600, 1);
+    await RedisClient.setex(key, Config.OTP_EXPIRE_TIME + 100, 1);
     return false;
   }
 }
