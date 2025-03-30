@@ -14,6 +14,8 @@ import {
 import ErrorResponse, {
   createAccountStatusErrorResponse,
   createInvalidRefreshTokenErrorResponse,
+  createInvalidVerificationTokenErrorResponse,
+  createOtpUsedErrorResponse,
 } from "@/utils/response-classes.ts/error-response.js";
 import UserDTO from "@/dtos/user_dto.js";
 import { SuccessResponse } from "@/utils/response-classes.ts/success-response.js";
@@ -23,7 +25,11 @@ import OtpServices from "@/services/otp_services";
 import { IUserSchema } from "@/models/user_model";
 import { UAParser } from "ua-parser-js";
 import { logger } from "@/utils/logger/logger";
-import { isEmailMethod, isMethodForMagicLink } from "@/utils/method";
+import {
+  isEmailMethod,
+  isMethodForMagicLink,
+  isMethodForOTP,
+} from "@/utils/method";
 
 class AuthController {
   public static async register(
@@ -225,7 +231,7 @@ class AuthController {
             ? SUCCESS_RESPONSE_CODE.VERIFICATION_LINK_SEND
             : SUCCESS_RESPONSE_CODE.OTP_SENT,
           message: isMethodForMagicLink(method)
-            ? SUCCESS_RESPONSE_MESSAGE.REGISTRATION_SUCCESS_MESSAGE
+            ? SUCCESS_RESPONSE_MESSAGE.VERIFICATION_LINK_SEND_MESSAGE
             : SUCCESS_RESPONSE_MESSAGE.OTP_SENT_MESSAGE,
         })
       );
@@ -268,12 +274,14 @@ class AuthController {
       }
 
       // Send token or otp depending on the method, and save verificationToken and verificationTokenExpiresAt in database.
-      const { hash } = await AuthControllerUtility.sendVerificationDetails({
-        user,
-        method,
-        email,
-        phone,
-      });
+      const { userToken } = await AuthControllerUtility.sendVerificationDetails(
+        {
+          user,
+          method,
+          email,
+          phone,
+        }
+      );
 
       // Create DTO and send response
       return res.status(200).json(
@@ -281,7 +289,9 @@ class AuthController {
           data: {
             email,
             phone,
-            hash: isMethodForMagicLink(method) ? undefined : hash,
+            verificationToken: isMethodForMagicLink(method)
+              ? undefined
+              : userToken,
             method,
             user: formattedUser,
           },
@@ -302,7 +312,13 @@ class AuthController {
   public static async verify(req: Request, res: Response, next: NextFunction) {
     try {
       // Destructure request body
-      const { phone, email, method, hash, otp } = req.body;
+      const {
+        phone,
+        email,
+        method,
+        verificationToken: userVerificationToken,
+        otp,
+      } = req.body;
 
       // Get user from database
       const user = await UserService.findOne({
@@ -315,89 +331,70 @@ class AuthController {
         return res.status(404).json(
           new ErrorResponse({
             code: ERROR_RESPONSE_CODE.USER_NOT_REGISTER,
-            message: ERROR_RESPONSE_MESSAGE.USER_REGISTERED_MESSAGE,
+            message: ERROR_RESPONSE_MESSAGE.USER_NOT_FOUND_MESSAGE,
           })
         );
       }
 
-      const verificationToken = isEmailMethod(method)
+      const dbVerificationToken = isEmailMethod(method)
         ? user.emailVerificationToken
         : user.phoneVerificationToken;
 
-      const verificationTokenExpiresAt = isEmailMethod(method)
+      const dbVerificationTokenExpiresAt = isEmailMethod(method)
         ? user.emailVerificationTokenExpiresAt
         : user.phoneVerificationTokenExpiresAt;
 
       // If verification token or verification token date is not found
-      // TODO: Fix error message here
-      if (!verificationToken || !verificationTokenExpiresAt) {
-        return res.status(400).json(
-          new ErrorResponse({
-            code: isMethodForMagicLink(method)
-              ? ERROR_RESPONSE_CODE.INVALID_LINK
-              : ERROR_RESPONSE_CODE.INVALID_OTP,
-            message: isMethodForMagicLink(method)
-              ? ERROR_RESPONSE_MESSAGE.INVALID_VERIFICATION_LINK_MESSAGE
-              : ERROR_RESPONSE_MESSAGE.INVALID_OTP_MESSAGE,
-          })
-        );
+      if (!dbVerificationToken || !dbVerificationTokenExpiresAt) {
+        return res
+          .status(400)
+          .json(createInvalidVerificationTokenErrorResponse(method));
       }
 
       // If verification token expired
-      if (verificationTokenExpiresAt.getTime() < Date.now()) {
+      if (dbVerificationTokenExpiresAt.getTime() < Date.now()) {
         return res.status(400).json(
           new ErrorResponse({
             code: ERROR_RESPONSE_CODE.REQUEST_TIMEOUT,
-            message: ERROR_RESPONSE_MESSAGE.EXPIRE_VERIFICATION_LINK_MESSAGE,
+            message: isMethodForMagicLink(method)
+              ? ERROR_RESPONSE_MESSAGE.EXPIRE_VERIFICATION_LINK_MESSAGE
+              : ERROR_RESPONSE_MESSAGE.EXPIRED_OTP_MESSAGE,
           })
         );
       }
 
       // Re-generate the token and hash from the data given by the user
-      const { token: generateToken, hash: generatedHash } =
+      const { dbToken: generateDbToken, userToken: generatedUserToken } =
         await AuthControllerUtility.generateTokenAndHash({
           email,
           phone,
           otp,
           method,
-          expireAt: verificationTokenExpiresAt.getTime(),
+          expireAt: dbVerificationTokenExpiresAt.getTime(),
           userId: user._id.toString(),
         });
 
       // Generate the hash of the token and the secret
-      const backendHash = HashService.hash(
-        verificationToken,
+      const generatedVerificationToken = HashService.hash(
+        dbVerificationToken,
         Config.SECONDARY_HASH_SECRET
       );
 
       if (
-        hash !== generatedHash ||
-        generateToken !== verificationToken ||
-        hash != backendHash
+        userVerificationToken !== generatedUserToken ||
+        generateDbToken !== dbVerificationToken ||
+        userVerificationToken != generatedVerificationToken
       ) {
-        return res.status(400).json(
-          // TODO: Fix error message here
-          new ErrorResponse({
-            code: ERROR_RESPONSE_CODE.INVALID_OTP,
-            message: ERROR_RESPONSE_MESSAGE.OTP_INVALID_MESSAGE,
-          })
-        );
+        return res
+          .status(400)
+          .json(createInvalidVerificationTokenErrorResponse(method));
       }
 
-      if (
-        method === AUTHENTICATION_METHOD.SMS_OTP ||
-        method === AUTHENTICATION_METHOD.WHATSAPP_OTP ||
-        method === AUTHENTICATION_METHOD.EMAIL_OTP
-      ) {
+      if (isMethodForOTP(method)) {
         const key = user._id.toString() + ":" + method + ":" + otp;
         const isUsed = await OtpServices.isUsed(key);
         if (isUsed) {
-          return res.status(406).json(
-            new ErrorResponse({
-              code: ERROR_RESPONSE_CODE.OTP_USED,
-              message: ERROR_RESPONSE_MESSAGE.OTP_USED_MESSAGE,
-            })
-          );
+          return res.status(406).json(createOtpUsedErrorResponse());
         }
       }
 
@@ -500,8 +497,8 @@ class AuthController {
         return res.status(200).json(
           new SuccessResponse({
             data: { user: formattedUser },
-            code: SUCCESS_RESPONSE_CODE.LOGIN_SUCCESS,
-            message: SUCCESS_RESPONSE_MESSAGE.LOGIN_SUCCESS_MESSAGE,
+            code: SUCCESS_RESPONSE_CODE.REFRESH_TOKEN_SUCCESS,
+            message: SUCCESS_RESPONSE_MESSAGE.REFRESH_TOKEN_SUCCESS_MESSAGE,
           })
         );
       } else {
@@ -544,13 +541,15 @@ class AuthController {
       }
 
       // Send token or otp depending on the method, and save verificationToken and verificationTokenExpiresAt in database.
-      const { hash } = await AuthControllerUtility.sendVerificationDetails({
-        user,
-        method,
-        email,
-        phone,
-        forgotPassword: true,
-      });
+      const { userToken } = await AuthControllerUtility.sendVerificationDetails(
+        {
+          user,
+          method,
+          email,
+          phone,
+          forgotPassword: true,
+        }
+      );
 
       // create DTO and send response
       const formattedUser = new UserDTO(user);
@@ -559,17 +558,12 @@ class AuthController {
           data: {
             email,
             phone,
-            hash:
-              method === AUTHENTICATION_METHOD.MAGIC_LINK ||
-              method === AUTHENTICATION_METHOD.PASSWORD
-                ? undefined
-                : hash,
+            hash: isMethodForMagicLink(method) ? undefined : userToken,
             method,
             user: formattedUser,
           },
-          // TODO: Fix error message here
-          code: SUCCESS_RESPONSE_CODE.REGISTRATION_SUCCESS,
-          message: SUCCESS_RESPONSE_MESSAGE.REGISTRATION_SUCCESS_MESSAGE,
+          code: SUCCESS_RESPONSE_CODE.FORGOT_PASSWORD_INITIATED,
+          message: SUCCESS_RESPONSE_MESSAGE.FORGOT_PASSWORD_INITIATED_MESSAGE,
         })
       );
     } catch (error) {
@@ -585,7 +579,14 @@ class AuthController {
   ) {
     try {
       // Destructure request body
-      const { phone, email, method, hash, otp, newPassword } = req.body;
+      const {
+        phone,
+        email,
+        method,
+        verificationToken: userVerificationToken,
+        otp,
+        newPassword,
+      } = req.body;
 
       // Get user from database
       const user = await UserService.findOne({
@@ -603,22 +604,18 @@ class AuthController {
         );
       }
 
-      const verificationToken = user.passwordResetToken;
-      const verificationTokenExpiresAt = user.passwordResetExpiresAt;
+      const dbVerificationToken = user.passwordResetToken;
+      const dbVerificationTokenExpiresAt = user.passwordResetExpiresAt;
 
       // If verification token or verification token date is not found
-      // TODO: Fix error message here
-      if (!verificationToken || !verificationTokenExpiresAt) {
-        return res.status(400).json(
-          new ErrorResponse({
-            code: ERROR_RESPONSE_CODE.INVALID_LINK,
-            message: ERROR_RESPONSE_MESSAGE.INVALID_VERIFICATION_LINK_MESSAGE,
-          })
-        );
+      if (!dbVerificationToken || !dbVerificationTokenExpiresAt) {
+        return res
+          .status(400)
+          .json(createInvalidVerificationTokenErrorResponse(method));
       }
 
       // If verification token expired
-      if (verificationTokenExpiresAt.getTime() < Date.now()) {
+      if (dbVerificationTokenExpiresAt.getTime() < Date.now()) {
         return res.status(400).json(
           new ErrorResponse({
             code: ERROR_RESPONSE_CODE.REQUEST_TIMEOUT,
@@ -627,49 +624,36 @@ class AuthController {
         );
       }
 
-      const { token: generateToken, hash: generatedHash } =
+      const { dbToken: generatedDbToken, userToken: generatedUserToken } =
         await AuthControllerUtility.generateTokenAndHash({
           email,
           phone,
           otp,
           method,
           userId: user._id.toString(),
-          expireAt: verificationTokenExpiresAt.getTime(),
+          expireAt: dbVerificationTokenExpiresAt.getTime(),
         });
 
-      const backendHash = HashService.hash(
-        verificationToken,
+      const generatedVerificationToken = HashService.hash(
+        dbVerificationToken,
         Config.SECONDARY_HASH_SECRET
       );
 
       if (
-        hash !== generatedHash ||
-        generateToken !== verificationToken ||
-        hash != backendHash
+        userVerificationToken !== generatedUserToken ||
+        generatedDbToken !== dbVerificationToken ||
+        userVerificationToken != generatedVerificationToken
       ) {
-        return res.status(400).json(
-          // TODO: Fix error message here
-          new ErrorResponse({
-            code: ERROR_RESPONSE_CODE.INVALID_OTP,
-            message: ERROR_RESPONSE_MESSAGE.OTP_INVALID_MESSAGE,
-          })
-        );
+        return res
+          .status(400)
+          .json(createInvalidVerificationTokenErrorResponse(method));
       }
 
-      if (
-        method === AUTHENTICATION_METHOD.SMS_OTP ||
-        method === AUTHENTICATION_METHOD.WHATSAPP_OTP ||
-        method === AUTHENTICATION_METHOD.EMAIL_OTP
-      ) {
+      if (isMethodForOTP(method)) {
         const key = user._id.toString() + ":" + method + ":" + otp;
         const isUsed = await OtpServices.isUsed(key);
         if (isUsed) {
-          return res.status(406).json(
-            new ErrorResponse({
-              code: ERROR_RESPONSE_CODE.OTP_USED,
-              message: ERROR_RESPONSE_MESSAGE.OTP_USED_MESSAGE,
-            })
-          );
+          return res.status(406).json(createOtpUsedErrorResponse());
         }
       }
 
@@ -697,8 +681,8 @@ class AuthController {
       return res.status(200).json(
         new SuccessResponse({
           data: { user: formattedUser },
-          code: SUCCESS_RESPONSE_CODE.VERIFICATION_SUCCESSFUL,
-          message: SUCCESS_RESPONSE_MESSAGE.VERIFICATION_SUCCESSFUL_MESSAGE,
+          code: SUCCESS_RESPONSE_CODE.FORGOT_PASSWORD_SUCCESSFUL,
+          message: SUCCESS_RESPONSE_MESSAGE.FORGOT_PASSWORD_SUCCESSFUL_MESSAGE,
         })
       );
     } catch (error) {
@@ -709,13 +693,19 @@ class AuthController {
 
   public static async logout(req: Request, res: Response, next: NextFunction) {
     try {
-      const refreshToken = req.cookies[Config.REFRESH_TOKEN_KEY];
+      const refreshToken =
+        req.cookies[Config.REFRESH_TOKEN_KEY] ??
+        req.headers.authorization?.split(" ")[1];
       await TokenService.removeRefreshToken(refreshToken, req._id!.toString());
       res.clearCookie(Config.ACCESS_TOKEN_KEY);
       res.clearCookie(Config.REFRESH_TOKEN_KEY);
-      return res
-        .status(200)
-        .json(new SuccessResponse({ data: null, code: "", message: "" }));
+      return res.status(200).json(
+        new SuccessResponse({
+          data: null,
+          code: SUCCESS_RESPONSE_CODE.LOGOUT_SUCCESS,
+          message: SUCCESS_RESPONSE_MESSAGE.LOGOUT_SUCCESS_MESSAGE,
+        })
+      );
     } catch (error) {
       logger.error(error);
       next(error);
@@ -744,7 +734,7 @@ class AuthController {
         new SuccessResponse({
           code: SUCCESS_RESPONSE_CODE.GET_CURRENT_USER_SUCCESS,
           message: SUCCESS_RESPONSE_MESSAGE.GET_CURRENT_USER_SUCCESS_MESSAGE,
-          data: { formattedUser },
+          data: { user: formattedUser },
         })
       );
     } catch (error) {
@@ -770,7 +760,7 @@ class AuthController {
         return res.status(404).json(
           new ErrorResponse({
             code: ERROR_RESPONSE_CODE.NOT_FOUND,
-            message: ERROR_RESPONSE_CODE.USER_NOT_FOUND_MESSAGE,
+            message: ERROR_RESPONSE_MESSAGE.USER_NOT_FOUND_MESSAGE,
           })
         );
       }
@@ -781,7 +771,7 @@ class AuthController {
         new SuccessResponse({
           code: SUCCESS_RESPONSE_CODE.UPDATE_CURRENT_USER_SUCCESS,
           message: SUCCESS_RESPONSE_MESSAGE.UPDATE_CURRENT_USER_SUCCESS_MESSAGE,
-          data: { formattedUser },
+          data: { user: formattedUser },
         })
       );
     } catch (error) {

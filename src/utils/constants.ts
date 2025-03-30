@@ -1,5 +1,4 @@
 class ERROR_RESPONSE_CODE {
-  // Error Codes
   static readonly SERVER_ERROR = "SERVER_ERROR";
   static readonly INVALID_OTP = "INVALID_OTP";
   static readonly VALIDATION_ERROR = "VALIDATION_ERROR";
@@ -25,7 +24,6 @@ class ERROR_RESPONSE_MESSAGE {
   static readonly ROUTE_NOT_FOUND_MESSAGE =
     "The requested URL was not found on this server. That’s all we know.";
 
-  // Auth Controller
   static readonly USER_NOT_REGISTER =
     "We couldn't find an account associated with this information. Please make sure you've entered the correct details or create a new account.";
   static readonly INCORRECT_PASSWORD =
@@ -54,8 +52,10 @@ class ERROR_RESPONSE_MESSAGE {
     "The verification details has expired. Please request a new one.";
   static readonly OTP_EXPIRED_MESSAGE =
     "The OTP has expired. Please request a new one to continue.";
-  static readonly OTP_INVALID_MESSAGE =
+  static readonly INVALID_OTP_MESSAGE =
     "The OTP you entered is not valid. Please ensure the code is correct and try again.";
+  static readonly EXPIRED_OTP_MESSAGE =
+    "The OTP has expired. Please request a new one to continue.";
   static readonly INVALID_VERIFICATION_LINK_MESSAGE =
     "The token you provided is invalid. Please check the the token and try again.";
   static readonly ALREADY_VERIFIED_MESSAGE =
@@ -80,6 +80,18 @@ class SUCCESS_RESPONSE_MESSAGE {
     "A verification link has been sent to your account. Please check your inbox to complete the verification.";
   static readonly VERIFICATION_SUCCESSFUL_MESSAGE =
     "Your account has been verified successfully";
+  static readonly REFRESH_TOKEN_SUCCESS_MESSAGE =
+    "Your refresh token has been refreshed successfully";
+  static readonly FORGOT_PASSWORD_INITIATED_MESSAGE =
+    "A verification link has been sent to your account. Please check your inbox to complete the verification.";
+  static readonly FORGOT_PASSWORD_SUCCESSFUL_MESSAGE =
+    "Your password has been reset successfully";
+  static readonly LOGOUT_SUCCESS_MESSAGE =
+    "You have been logged out successfully";
+  static readonly GET_CURRENT_USER_SUCCESS_MESSAGE =
+    "Your account details have been fetched successfully";
+  static readonly UPDATE_CURRENT_USER_SUCCESS_MESSAGE =
+    "Your account details have been updated successfully";
 }
 
 class SUCCESS_RESPONSE_CODE {
@@ -88,6 +100,12 @@ class SUCCESS_RESPONSE_CODE {
   static readonly OTP_SENT = "OTP_SENT";
   static readonly VERIFICATION_LINK_SEND = "VERIFICATION_LINK_SEND";
   static readonly VERIFICATION_SUCCESSFUL = "VERIFICATION_SUCCESSFUL";
+  static readonly REFRESH_TOKEN_SUCCESS = "REFRESH_TOKEN_SUCCESS";
+  static readonly FORGOT_PASSWORD_INITIATED = "FORGOT_PASSWORD_INITIATED";
+  static readonly FORGOT_PASSWORD_SUCCESSFUL = "FORGOT_PASSWORD_SUCCESSFUL";
+  static readonly LOGOUT_SUCCESS = "LOGOUT_SUCCESS";
+  static readonly GET_CURRENT_USER_SUCCESS = "GET_CURRENT_USER_SUCCESS";
+  static readonly UPDATE_CURRENT_USER_SUCCESS = "UPDATE_CURRENT_USER_SUCCESS";
 }
 
 class USER_STATUS {

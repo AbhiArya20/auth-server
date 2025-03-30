@@ -1,9 +1,11 @@
 import {
+  AUTHENTICATION_METHOD,
   ERROR_RESPONSE_CODE,
   ERROR_RESPONSE_MESSAGE,
   USER_STATUS,
 } from "@/utils/constants.js";
 import { ZodError } from "zod";
+import { isMethodForMagicLink } from "@/utils/method";
 class ErrorResponse<T> {
   success: boolean;
   code?: string;
@@ -55,5 +57,25 @@ export const createServerErrorResponse = () => {
   return new ErrorResponse({
     code: ERROR_RESPONSE_CODE.SERVER_ERROR,
     message: ERROR_RESPONSE_MESSAGE.SERVER_ERROR_MESSAGE,
+  });
+};
+
+export const createInvalidVerificationTokenErrorResponse = (
+  method: AUTHENTICATION_METHOD
+) => {
+  return new ErrorResponse({
+    code: isMethodForMagicLink(method)
+      ? ERROR_RESPONSE_CODE.INVALID_LINK
+      : ERROR_RESPONSE_CODE.INVALID_OTP,
+    message: isMethodForMagicLink(method)
+      ? ERROR_RESPONSE_MESSAGE.INVALID_VERIFICATION_LINK_MESSAGE
+      : ERROR_RESPONSE_MESSAGE.INVALID_OTP_MESSAGE,
+  });
+};
+
+export const createOtpUsedErrorResponse = () => {
+  return new ErrorResponse({
+    code: ERROR_RESPONSE_CODE.OTP_USED,
+    message: ERROR_RESPONSE_MESSAGE.OTP_USED_MESSAGE,
   });
 };
