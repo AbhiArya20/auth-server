@@ -28,7 +28,7 @@ cp .env.example .env
 npm run dev
 ```
 
-`OR` Run using docker
+`OR` Run using docker - Linux, MacOS, Windows + WSL
 
 ```bash
 # development

@@ -7,12 +7,12 @@ RUN apk add --no-cache libc6-compat
 # Set working directory
 WORKDIR /app
 
-RUN if ! command -v yarn &> /dev/null; then npm install -g yarn; fi
-
 COPY ./package.json ./package.json
 
 # Install dependencies
-RUN yarn install
+RUN npm install
+
+RUN npm dedupe
 
 COPY . .
 
@@ -21,12 +21,15 @@ RUN npm run build
 FROM base AS runner
 WORKDIR /app
 
+COPY --from=builder /app/dist .
+COPY --from=builder /app/package.json /app/package-lock.json .      
+RUN npm install --omit=dev            
+
 # Don't run production as root
 RUN addgroup --system --gid 1001 expressjs
 RUN adduser --system --uid 1001 expressjs
 USER expressjs
-COPY --from=builder /app/dist .
 
 EXPOSE 5000
 
-CMD node app/dist/index.js
+CMD  node index.js
